@@ -128,7 +128,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchConstructorStandings(): Result<Pair<String, List<ConstructorStandingItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 // Ensure driver metadata is fetched first so constructor colors can be inferred from drivers
                 getDriverMetadata()
 
@@ -141,7 +141,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchCurrentCalendar(): Result<Pair<String, List<SeasonRaceItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getCurrentCalendar()
                 val season = root.mrData?.raceTable?.season.orEmpty()
                 val list = root.mrData?.raceTable?.races.orEmpty()
@@ -151,7 +151,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchRaceResults(round: String): Result<List<RaceResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getRaceResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.results.orEmpty()
                 val metadata = getDriverMetadata()
@@ -178,7 +178,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchQualifyingResults(round: String): Result<List<QualifyingResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getQualifyingResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.qualifyingResults.orEmpty()
                 val metadata = getDriverMetadata()
@@ -205,7 +205,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchSprintResults(round: String): Result<List<RaceResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getSprintResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.sprintResults.orEmpty()
                 val metadata = getDriverMetadata()
@@ -381,7 +381,7 @@ class F1ChampionshipRepository {
         raceDate: String,
         sessionName: String
     ): Result<List<PracticeTimingItem>> = withContext(Dispatchers.IO) {
-        runCatching {
+        cancellableResult {
             val sessionKey = findOpenF1SessionKey(year, country, raceDate, sessionName)
                 ?: return@cancellableResult emptyList()
 
@@ -439,7 +439,7 @@ class F1ChampionshipRepository {
 
             val leaderDur = driverItems.firstOrNull()?.third?.optDouble("lap_duration", 0.0) ?: 0.0
             if (leaderDur <= 0.0 || bestLapMap.isEmpty()) {
-                return@runCatching emptyList()
+                return@cancellableResult emptyList()
             }
 
             driverItems.mapIndexed { index, (num, dObj, bestLap) ->
@@ -507,12 +507,12 @@ class F1ChampionshipRepository {
         country: String,
         raceDate: String
     ): Result<List<QualifyingResultItem>> = withContext(Dispatchers.IO) {
-        runCatching {
+        cancellableResult {
             var sessionKey = findOpenF1SessionKey(year, country, raceDate, "Sprint Qualifying")
             if (sessionKey == null) {
                 sessionKey = findOpenF1SessionKey(year, country, raceDate, "Sprint Shootout")
             }
-            if (sessionKey == null) return@runCatching emptyList()
+            if (sessionKey == null) return@cancellableResult emptyList()
 
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()
             val driversMap = mutableMapOf<Int, JSONObject>()
@@ -553,7 +553,7 @@ class F1ChampionshipRepository {
             }
 
             if (validLaps.isEmpty()) {
-                return@runCatching emptyList()
+                return@cancellableResult emptyList()
             }
 
             validLaps.sortBy { it.dateStart }

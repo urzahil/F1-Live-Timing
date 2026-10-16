@@ -170,7 +170,7 @@ private fun GrandPrixCalendarList(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(F1PitWallSurface)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -194,15 +194,18 @@ private fun GrandPrixCalendarList(
             if (season.isNotBlank()) {
                 Box(
                     modifier = Modifier
+                        .width(56.dp)
                         .background(F1Red, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = season,
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center
                     )
                 }
             }

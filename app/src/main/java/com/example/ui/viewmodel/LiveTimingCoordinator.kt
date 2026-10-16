@@ -117,7 +117,7 @@ internal class LiveTimingCoordinator(
             else -> "No active session"
         }
         val error = when {
-            stale && hasAnyData -> "Showing last successful data; the latest refresh was incomplete."
+            stale && hasAnyData -> "Showing last successful data - the latest refresh was incomplete."
             stale -> "Unable to refresh live data. Check the backend connection."
             else -> null
         }

@@ -68,6 +68,16 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: F1ViewModel by viewModels()
 
+    override fun onStart() {
+        super.onStart()
+        viewModel.setAppVisible(true)
+    }
+
+    override fun onStop() {
+        viewModel.setAppVisible(false)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

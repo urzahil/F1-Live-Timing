@@ -96,14 +96,14 @@ fun LiveTimingScreen(
             onOpenWeather = onOpenWeather
         )
 
-        Text(
-            text = liveDataStatus,
-            color = if (liveDataStatus.contains("stale", ignoreCase = true) ||
-                liveDataStatus.contains("unable", ignoreCase = true)) Color(0xFFFFB74D) else F1TextMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
-        )
+//        Text(
+//            text = liveDataStatus,
+//            color = if (liveDataStatus.contains("stale", ignoreCase = true) ||
+//                liveDataStatus.contains("unable", ignoreCase = true)) Color(0xFFFFB74D) else F1TextMuted,
+//            fontSize = 10.sp,
+//            fontWeight = FontWeight.Medium,
+//            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+//        )
 
         if (!isLiveSessionActive) {
             NoActiveSessionCard(

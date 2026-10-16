@@ -197,7 +197,9 @@ class F1LiveRepository {
                     map[key] = catching
                 }
             }
-        } catch (_: Exception) {}
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse catching data (${error.javaClass.simpleName})")
+        }
         return map
     }
 
@@ -270,7 +272,8 @@ class F1LiveRepository {
                 status = displayStatus,
                 isLive = isLive
             )
-        } catch (e: Exception) {
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")
             ParsedSession(status = "NO ACTIVE SESSION", isLive = false)
         }
     }
@@ -296,7 +299,8 @@ class F1LiveRepository {
                 windDirection = dir,
                 isRaining = rainVal > 0.0
             )
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse weather data (${error.javaClass.simpleName})")
             ParsedWeather()
         }
     }
@@ -366,7 +370,9 @@ class F1LiveRepository {
                     }
                 }
             }
-        } catch (_: Exception) { }
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse tyre stint data (${error.javaClass.simpleName})")
+        }
         return result
     }
 
@@ -563,7 +569,9 @@ class F1LiveRepository {
                     )
                 )
             }
-        } catch (_: Exception) { }
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse standings data (${error.javaClass.simpleName})")
+        }
 
         val sortedList = list.sortedBy { it.position.toIntOrNull() ?: 999 }
 

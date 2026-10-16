@@ -155,6 +155,8 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private val calendarResultsCache = CalendarResultsCache()
 
     private var pollingJob: Job? = null
+    private var isAppVisible = true
+    private var sessionResultsJob: Job? = null
     private val refreshMutex = Mutex()
     private val manualRefreshPending = AtomicBoolean(false)
 
@@ -167,6 +169,16 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         startPolling()
         loadChampionshipData()
         loadCalendarData()
+    }
+
+    fun setAppVisible(visible: Boolean) {
+        isAppVisible = visible
+        if (!visible) {
+            pollingJob?.cancel()
+            pollingJob = null
+        } else if (_isPollingActive.value) {
+            startPolling()
+        }
     }
 
     fun selectTab(tab: F1Tab) {
@@ -250,10 +262,11 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restartPolling() {
         pollingJob?.cancel()
-        startPolling()
+        if (isAppVisible && _isPollingActive.value) startPolling()
     }
 
     private fun startPolling() {
+        if (!isAppVisible || !_isPollingActive.value) return
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive) {
@@ -369,6 +382,9 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadSessionResultsForSelectedRace(type: WeekendSessionType) {
+        sessionResultsJob?.cancel()
+        _isSessionResultsLoading.value = false
+        _sessionResultsError.value = null
         val race = _selectedCalendarRace.value ?: return
         val round = race.round.orEmpty()
         if (round.isBlank()) return
@@ -382,7 +398,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                     _sessionResultsError.value = null
                     return
                 }
-                viewModelScope.launch {
+                sessionResultsJob = viewModelScope.launch {
                     _isSessionResultsLoading.value = true
                     _sessionResultsError.value = null
                     val res = championshipRepo.fetchRaceResults(round)
@@ -393,8 +409,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                         } else if (_raceResults.value.isEmpty()) {
                             _raceResults.value = emptyList()
                         }
-                    }.onFailure {
+                    }.onFailure { error ->
+                        Log.w(TAG, "Race results request failed (${error.javaClass.simpleName})")
                         _raceResults.value = emptyList()
+                        _sessionResultsError.value = "Unable to load race results. Please try again."
                     }
                     _isSessionResultsLoading.value = false
                 }
@@ -406,7 +424,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                     _sessionResultsError.value = null
                     return
                 }
-                viewModelScope.launch {
+                sessionResultsJob = viewModelScope.launch {
                     _isSessionResultsLoading.value = true
                     _sessionResultsError.value = null
                     val res = championshipRepo.fetchQualifyingResults(round)
@@ -417,8 +435,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                         } else if (_qualifyingResults.value.isEmpty()) {
                             _qualifyingResults.value = emptyList()
                         }
-                    }.onFailure {
+                    }.onFailure { error ->
+                        Log.w(TAG, "Qualifying results request failed (${error.javaClass.simpleName})")
                         _qualifyingResults.value = emptyList()
+                        _sessionResultsError.value = "Unable to load qualifying results. Please try again."
                     }
                     _isSessionResultsLoading.value = false
                 }
@@ -430,7 +450,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                     _sessionResultsError.value = null
                     return
                 }
-                viewModelScope.launch {
+                sessionResultsJob = viewModelScope.launch {
                     _isSessionResultsLoading.value = true
                     _sessionResultsError.value = null
                     val res = championshipRepo.fetchSprintResults(round)
@@ -441,8 +461,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                         } else if (_sprintResults.value.isEmpty()) {
                             _sprintResults.value = emptyList()
                         }
-                    }.onFailure {
+                    }.onFailure { error ->
+                        Log.w(TAG, "Sprint results request failed (${error.javaClass.simpleName})")
                         _sprintResults.value = emptyList()
+                        _sessionResultsError.value = "Unable to load sprint results. Please try again."
                     }
                     _isSessionResultsLoading.value = false
                 }
@@ -454,7 +476,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                     _sessionResultsError.value = null
                     return
                 }
-                viewModelScope.launch {
+                sessionResultsJob = viewModelScope.launch {
                     _isSessionResultsLoading.value = true
                     _sessionResultsError.value = null
                     val year = race.season.orEmpty().ifBlank { _calendarSeason.value }
@@ -466,58 +488,12 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                             calendarResultsCache.sprintQualifying[resultCacheKey] = list
                             _sprintQualifyingResults.value = list
                         } else {
-                            // If OpenF1 had no telemetry for SQ, fallback to Sprint Race starting grid in 3-session format
-                            val sprintRes = championshipRepo.fetchSprintResults(round).getOrNull().orEmpty()
-                            if (sprintRes.isNotEmpty()) {
-                                val fallbackSq = sprintRes
-                                    .filter { (it.grid?.toIntOrNull() ?: 0) > 0 }
-                                    .sortedBy { it.grid?.toIntOrNull() ?: 99 }
-                                    .mapIndexed { idx, item ->
-                                        val pos = (idx + 1).toString()
-                                        val posNum = pos.toIntOrNull() ?: 0
-                                        val validTime = if (item.time?.time?.contains(":") == true) item.time.time else null
-                                        QualifyingResultItem(
-                                            number = item.number,
-                                            position = pos,
-                                            driver = item.driver,
-                                            constructor = item.constructor,
-                                            q1 = if (posNum <= 20) validTime ?: "SQ1" else null,
-                                            q2 = if (posNum <= 15) validTime ?: "SQ2" else null,
-                                            q3 = if (posNum <= 10) validTime ?: "SQ3" else null
-                                        )
-                                    }
-                                calendarResultsCache.sprintQualifying[resultCacheKey] = fallbackSq
-                                _sprintQualifyingResults.value = fallbackSq
-                            } else {
-                                _sprintQualifyingResults.value = emptyList()
-                            }
-                        }
-                    }.onFailure {
-                        // Fallback to Sprint Race starting grid if available
-                        val sprintRes = championshipRepo.fetchSprintResults(round).getOrNull().orEmpty()
-                        if (sprintRes.isNotEmpty()) {
-                            val fallbackSq = sprintRes
-                                .filter { (it.grid?.toIntOrNull() ?: 0) > 0 }
-                                .sortedBy { it.grid?.toIntOrNull() ?: 99 }
-                                .mapIndexed { idx, item ->
-                                    val pos = (idx + 1).toString()
-                                    val posNum = pos.toIntOrNull() ?: 0
-                                    val validTime = if (item.time?.time?.contains(":") == true) item.time.time else null
-                                    QualifyingResultItem(
-                                        number = item.number,
-                                        position = pos,
-                                        driver = item.driver,
-                                        constructor = item.constructor,
-                                        q1 = if (posNum <= 20) validTime ?: "SQ1" else null,
-                                        q2 = if (posNum <= 15) validTime ?: "SQ2" else null,
-                                        q3 = if (posNum <= 10) validTime ?: "SQ3" else null
-                                    )
-                                }
-                            calendarResultsCache.sprintQualifying[resultCacheKey] = fallbackSq
-                            _sprintQualifyingResults.value = fallbackSq
-                        } else {
                             _sprintQualifyingResults.value = emptyList()
                         }
+                    }.onFailure { error ->
+                        Log.w(TAG, "Sprint qualifying results request failed (${error.javaClass.simpleName})")
+                        _sprintQualifyingResults.value = emptyList()
+                        _sessionResultsError.value = "Unable to load sprint qualifying results. Please try again."
                     }
                     _isSessionResultsLoading.value = false
                 }
@@ -532,7 +508,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                     _sessionResultsError.value = null
                     return
                 }
-                viewModelScope.launch {
+                sessionResultsJob = viewModelScope.launch {
                     _isSessionResultsLoading.value = true
                     _sessionResultsError.value = null
                     val sessionName = when (type) {
@@ -557,8 +533,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                         } else if (_practiceTimings.value.isEmpty()) {
                             _practiceTimings.value = emptyList()
                         }
-                    }.onFailure {
+                    }.onFailure { error ->
+                        Log.w(TAG, "Practice timings request failed (${error.javaClass.simpleName})")
                         _practiceTimings.value = emptyList()
+                        _sessionResultsError.value = "Unable to load practice timings. Please try again."
                     }
                     _isSessionResultsLoading.value = false
                 }

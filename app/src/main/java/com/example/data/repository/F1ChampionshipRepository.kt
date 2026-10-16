@@ -9,16 +9,51 @@ import com.example.data.model.PracticeTimingItem
 import com.example.data.model.QualifyingResultItem
 import com.example.data.model.RaceResultItem
 import com.example.data.model.SeasonRaceItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class F1ChampionshipRepository {
+
+    /** Await OkHttp without blocking an IO thread and cancel the call with its coroutine. */
+    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { cancel() }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, error: java.io.IOException) {
+                continuation.resumeWith(Result.failure(error))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (continuation.isActive) {
+                    continuation.resumeWith(Result.success(response))
+                } else {
+                    response.close()
+                }
+            }
+        })
+    }
+
+    /** Preserve structured cancellation instead of converting it into a normal failed Result. */
+    private suspend fun <T> cancellableResult(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Result.failure(error)
+    }
 
     private val service = NetworkClient.jolpicaService
     private val httpClient = NetworkClient.okHttpClient
@@ -28,58 +63,64 @@ class F1ChampionshipRepository {
         val driverColors: Map<String, androidx.compose.ui.graphics.Color>
     )
 
+    @Volatile
     private var cachedDriverMetadata: DriverMetadata? = null
 
-    private fun getDriverMetadata(): DriverMetadata {
+    private val driverMetadataMutex = Mutex()
+
+    private suspend fun getDriverMetadata(): DriverMetadata = driverMetadataMutex.withLock {
         val existing = cachedDriverMetadata
-        if (existing != null && existing.headshots.isNotEmpty()) return existing
+        if (existing != null && (existing.headshots.isNotEmpty() || existing.driverColors.isNotEmpty())) {
+            return@withLock existing
+        }
         val fetched = fetchDriverMetadataFromApi()
         if (fetched.headshots.isNotEmpty() || fetched.driverColors.isNotEmpty()) {
             cachedDriverMetadata = fetched
         }
-        return fetched
+        fetched
+    }
+
+    private fun enrichDriver(
+        driver: F1Driver?,
+        constructor: F1Constructor?,
+        metadata: DriverMetadata
+    ): F1Driver? {
+        if (driver == null) return null
+        val code = driver.code?.uppercase().orEmpty()
+        val number = driver.permanentNumber.orEmpty()
+        val familyName = driver.familyName?.lowercase().orEmpty()
+        val headshot = driver.headshotUrl
+            ?: metadata.headshots[code]
+            ?: metadata.headshots[number]
+            ?: metadata.headshots[familyName]
+        val driverColor = metadata.driverColors[code]
+            ?: metadata.driverColors[number]
+            ?: metadata.driverColors[familyName]
+
+        if (driverColor != null) {
+            constructor?.constructorId?.takeIf { it.isNotBlank() }?.let {
+                com.example.ui.theme.TeamColors.registerColor(it, driverColor)
+            }
+            constructor?.name?.takeIf { it.isNotBlank() }?.let {
+                com.example.ui.theme.TeamColors.registerColor(it, driverColor)
+            }
+        }
+        return driver.copy(headshotUrl = headshot)
     }
 
     suspend fun fetchDriverStandings(): Result<Pair<String, List<DriverStandingItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getCurrentDriverStandings()
                 val season = root.mrData?.standingsTable?.season.orEmpty()
                 val rawList = root.mrData?.standingsTable?.standingsLists?.firstOrNull()?.driverStandings.orEmpty()
 
                 // Fetch real official driver photos and colors extracted from OpenF1 feed at runtime
                 val metadata = getDriverMetadata()
-                val headshotsMap = metadata.headshots
-                val driverColorsMap = metadata.driverColors
 
                 val enrichedList = rawList.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val number = item.driver?.permanentNumber.orEmpty()
-                    val familyName = item.driver?.familyName?.lowercase().orEmpty()
-
-                    val headshot = item.driver?.headshotUrl
-                        ?: headshotsMap[code]
-                        ?: headshotsMap[number]
-                        ?: headshotsMap[familyName]
-
-                    // Infer constructor colors directly from the drivers' colors
-                    val driverColor = driverColorsMap[code]
-                        ?: driverColorsMap[number]
-                        ?: driverColorsMap[familyName]
-
-                    if (driverColor != null) {
-                        val constructorId = item.constructors?.firstOrNull()?.constructorId
-                        val constructorName = item.constructors?.firstOrNull()?.name
-                        if (!constructorId.isNullOrBlank()) {
-                            com.example.ui.theme.TeamColors.registerColor(constructorId, driverColor)
-                        }
-                        if (!constructorName.isNullOrBlank()) {
-                            com.example.ui.theme.TeamColors.registerColor(constructorName, driverColor)
-                        }
-                    }
-
-                    val enrichedDriver = item.driver?.copy(headshotUrl = headshot)
-                    item.copy(driver = enrichedDriver, headshotUrl = headshot)
+                    val enrichedDriver = enrichDriver(item.driver, item.constructors?.firstOrNull(), metadata)
+                    item.copy(driver = enrichedDriver, headshotUrl = enrichedDriver?.headshotUrl)
                 }
 
                 Pair(season, enrichedList)
@@ -88,7 +129,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchConstructorStandings(): Result<Pair<String, List<ConstructorStandingItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 // Ensure driver metadata is fetched first so constructor colors can be inferred from drivers
                 getDriverMetadata()
 
@@ -101,7 +142,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchCurrentCalendar(): Result<Pair<String, List<SeasonRaceItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getCurrentCalendar()
                 val season = root.mrData?.raceTable?.season.orEmpty()
                 val list = root.mrData?.raceTable?.races.orEmpty()
@@ -111,93 +152,48 @@ class F1ChampionshipRepository {
 
     suspend fun fetchRaceResults(round: String): Result<List<RaceResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getRaceResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.results.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }
 
     suspend fun fetchQualifyingResults(round: String): Result<List<QualifyingResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getQualifyingResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.qualifyingResults.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }
 
     suspend fun fetchSprintResults(round: String): Result<List<RaceResultItem>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getSprintResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.sprintResults.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }
 
-    private fun fetchDriverMetadataFromApi(): DriverMetadata {
+    private suspend fun fetchDriverMetadataFromApi(): DriverMetadata {
         val headshotsMap = mutableMapOf<String, String>()
         val driverColorsMap = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
         try {
             val req = Request.Builder()
                 .url("https://api.openf1.org/v1/drivers?session_key=latest")
                 .build()
-            httpClient.newCall(req).execute().use { resp ->
+            httpClient.newCall(req).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -240,7 +236,11 @@ class F1ChampionshipRepository {
                     }
                 }
             }
-        } catch (_: Exception) { }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            android.util.Log.w("F1ChampionshipRepository", "Driver metadata request failed (${error.javaClass.simpleName})")
+        }
         return DriverMetadata(headshotsMap, driverColorsMap)
     }
 
@@ -253,10 +253,12 @@ class F1ChampionshipRepository {
         }
     }
 
-    private fun findOpenF1SessionKey(year: String, country: String, raceDate: String, sessionName: String): Int? {
+    private suspend fun findOpenF1SessionKey(year: String, country: String, raceDate: String, sessionName: String): Int? {
         val mappedCountry = URLEncoder.encode(mapCountryForOpenF1(country), "UTF-8")
         val encSessionName = URLEncoder.encode(sessionName, "UTF-8")
-        val y = if (year.isBlank() || year.equals("current", ignoreCase = true)) "2026" else year
+        val y = if (year.isBlank() || year.equals("current", ignoreCase = true)) {
+            Calendar.getInstance().get(Calendar.YEAR).toString()
+        } else year
 
         // 1. Try with year
         val keyWithYear = querySessionKey("https://api.openf1.org/v1/sessions?year=$y&country_name=$mappedCountry&session_name=$encSessionName", raceDate)
@@ -284,10 +286,10 @@ class F1ChampionshipRepository {
         return null
     }
 
-    private fun querySessionKey(url: String, raceDate: String): Int? {
+    private suspend fun querySessionKey(url: String, raceDate: String): Int? {
         return try {
             val req = Request.Builder().url(url).build()
-            httpClient.newCall(req).execute().use { resp ->
+            httpClient.newCall(req).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return null
                 val body = resp.body?.string().orEmpty()
                 if (!body.startsWith("[")) return null
@@ -335,14 +337,14 @@ class F1ChampionshipRepository {
         raceDate: String,
         sessionName: String
     ): Result<List<PracticeTimingItem>> = withContext(Dispatchers.IO) {
-        runCatching {
+        cancellableResult {
             val sessionKey = findOpenF1SessionKey(year, country, raceDate, sessionName)
-                ?: return@runCatching emptyList()
+                ?: return@cancellableResult emptyList()
 
             // Fetch drivers for this session
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()
             val driversMap = mutableMapOf<Int, JSONObject>()
-            httpClient.newCall(driversReq).execute().use { resp ->
+            httpClient.newCall(driversReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -361,7 +363,7 @@ class F1ChampionshipRepository {
             val bestLapMap = mutableMapOf<Int, JSONObject>()
             val lapCountMap = mutableMapOf<Int, Int>()
 
-            httpClient.newCall(lapsReq).execute().use { resp ->
+            httpClient.newCall(lapsReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -393,7 +395,7 @@ class F1ChampionshipRepository {
 
             val leaderDur = driverItems.firstOrNull()?.third?.optDouble("lap_duration", 0.0) ?: 0.0
             if (leaderDur <= 0.0 || bestLapMap.isEmpty()) {
-                return@runCatching emptyList()
+                return@cancellableResult emptyList()
             }
 
             driverItems.mapIndexed { index, (num, dObj, bestLap) ->
@@ -461,16 +463,16 @@ class F1ChampionshipRepository {
         country: String,
         raceDate: String
     ): Result<List<QualifyingResultItem>> = withContext(Dispatchers.IO) {
-        runCatching {
+        cancellableResult {
             var sessionKey = findOpenF1SessionKey(year, country, raceDate, "Sprint Qualifying")
             if (sessionKey == null) {
                 sessionKey = findOpenF1SessionKey(year, country, raceDate, "Sprint Shootout")
             }
-            if (sessionKey == null) return@runCatching emptyList()
+            if (sessionKey == null) return@cancellableResult emptyList()
 
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()
             val driversMap = mutableMapOf<Int, JSONObject>()
-            httpClient.newCall(driversReq).execute().use { resp ->
+            httpClient.newCall(driversReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -488,7 +490,7 @@ class F1ChampionshipRepository {
             val lapsReq = Request.Builder().url("https://api.openf1.org/v1/laps?session_key=$sessionKey").build()
             val validLaps = mutableListOf<LapEntry>()
 
-            httpClient.newCall(lapsReq).execute().use { resp ->
+            httpClient.newCall(lapsReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -507,7 +509,7 @@ class F1ChampionshipRepository {
             }
 
             if (validLaps.isEmpty()) {
-                return@runCatching emptyList()
+                return@cancellableResult emptyList()
             }
 
             validLaps.sortBy { it.dateStart }

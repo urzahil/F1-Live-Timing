@@ -106,9 +106,9 @@ fun StandingsScreen(
                 if (season.isNotBlank()) {
                     Box(
                         modifier = Modifier
-                            .size(width = 56.dp, height = 24.dp)
-                            .background(F1Red, RoundedCornerShape(4.dp)),
-                        contentAlignment = Alignment.Center
+                            .width(56.dp)
+                            .background(F1Red, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = season,

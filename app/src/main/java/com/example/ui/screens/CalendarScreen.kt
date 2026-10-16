@@ -196,14 +196,16 @@ private fun GrandPrixCalendarList(
                     modifier = Modifier
                         .width(56.dp)
                         .background(F1Red, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = season,
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center
                     )
                 }
             }

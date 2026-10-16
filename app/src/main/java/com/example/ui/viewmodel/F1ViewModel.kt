@@ -155,7 +155,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private val calendarResultsCache = CalendarResultsCache()
 
     private var pollingJob: Job? = null
-    private var isAppVisible = true
+    private var isAppVisible = false
     private var sessionResultsJob: Job? = null
     private val refreshMutex = Mutex()
     private val manualRefreshPending = AtomicBoolean(false)
@@ -363,6 +363,9 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             _selectedSessionType.value = initialSession
             loadSessionResultsForSelectedRace(initialSession)
         } else {
+            sessionResultsJob?.cancel()
+            sessionResultsJob = null
+            _isSessionResultsLoading.value = false
             _raceResults.value = emptyList()
             _qualifyingResults.value = emptyList()
             _sprintResults.value = emptyList()

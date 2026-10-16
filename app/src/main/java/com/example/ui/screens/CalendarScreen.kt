@@ -170,7 +170,7 @@ private fun GrandPrixCalendarList(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(F1PitWallSurface)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {

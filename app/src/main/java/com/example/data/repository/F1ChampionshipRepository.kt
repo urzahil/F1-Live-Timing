@@ -260,15 +260,30 @@ class F1ChampionshipRepository {
             Calendar.getInstance().get(Calendar.YEAR).toString()
         } else year
 
-        // 1. Try with year
-        val keyWithYear = querySessionKey("https://api.openf1.org/v1/sessions?year=$y&country_name=$mappedCountry&session_name=$encSessionName", raceDate)
-        if (keyWithYear != null) return keyWithYear
+        // The calendar event's scheduled session date is a better identifier than country.
+        // Some Grands Prix are branded for one country but held at a circuit in another
+        // (for example, the 2026 Bahrain Grand Prix at Sepang in Malaysia). Filtering by
+        // country first excludes valid OpenF1 sessions for those events.
+        val keyByYearAndDate = querySessionKey(
+            "https://api.openf1.org/v1/sessions?year=$y&session_name=$encSessionName",
+            raceDate
+        )
+        if (keyByYearAndDate != null) return keyByYearAndDate
 
-        // 2. Try without year
-        val keyWithoutYear = querySessionKey("https://api.openf1.org/v1/sessions?country_name=$mappedCountry&session_name=$encSessionName", raceDate)
+        // Retain country-filtered fallbacks for incomplete/older API data.
+        val keyWithCountry = querySessionKey(
+            "https://api.openf1.org/v1/sessions?year=$y&country_name=$mappedCountry&session_name=$encSessionName",
+            raceDate
+        )
+        if (keyWithCountry != null) return keyWithCountry
+
+        val keyWithoutYear = querySessionKey(
+            "https://api.openf1.org/v1/sessions?country_name=$mappedCountry&session_name=$encSessionName",
+            raceDate
+        )
         if (keyWithoutYear != null) return keyWithoutYear
 
-        // 3. Alternate session name spellings
+        // Alternate session name spellings used by some API feeds.
         val altName = when (sessionName) {
             "Practice 1" -> "FP1"
             "Practice 2" -> "FP2"
@@ -279,8 +294,17 @@ class F1ChampionshipRepository {
         }
         if (altName != null) {
             val encAlt = URLEncoder.encode(altName, "UTF-8")
-            val keyAlt = querySessionKey("https://api.openf1.org/v1/sessions?country_name=$mappedCountry&session_name=$encAlt", raceDate)
-            if (keyAlt != null) return keyAlt
+            val keyAltByYearAndDate = querySessionKey(
+                "https://api.openf1.org/v1/sessions?year=$y&session_name=$encAlt",
+                raceDate
+            )
+            if (keyAltByYearAndDate != null) return keyAltByYearAndDate
+
+            val keyAltByCountry = querySessionKey(
+                "https://api.openf1.org/v1/sessions?country_name=$mappedCountry&session_name=$encAlt",
+                raceDate
+            )
+            if (keyAltByCountry != null) return keyAltByCountry
         }
 
         return null

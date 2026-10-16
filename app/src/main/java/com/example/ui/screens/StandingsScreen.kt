@@ -79,7 +79,7 @@ fun StandingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(F1PitWallSurface)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -93,7 +93,7 @@ fun StandingsScreen(
                         tint = Color(0xFFFFD700),
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "WORLD CHAMPIONSHIP",
                         color = F1TextPrimary,
@@ -106,9 +106,9 @@ fun StandingsScreen(
                 if (season.isNotBlank()) {
                     Box(
                         modifier = Modifier
-                            .width(56.dp)
-                            .background(F1Red, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .size(width = 56.dp, height = 24.dp)
+                            .background(F1Red, RoundedCornerShape(4.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = season,

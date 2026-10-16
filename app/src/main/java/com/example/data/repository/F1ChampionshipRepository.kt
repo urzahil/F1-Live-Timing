@@ -117,8 +117,6 @@ class F1ChampionshipRepository {
 
                 // Fetch real official driver photos and colors extracted from OpenF1 feed at runtime
                 val metadata = getDriverMetadata()
-                val headshotsMap = metadata.headshots
-                val driverColorsMap = metadata.driverColors
 
                 val enrichedList = rawList.map { item ->
                     val enrichedDriver = enrichDriver(item.driver, item.constructors?.firstOrNull(), metadata)
@@ -158,8 +156,6 @@ class F1ChampionshipRepository {
                 val root = service.getRaceResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.results.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
                     item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
@@ -172,8 +168,6 @@ class F1ChampionshipRepository {
                 val root = service.getQualifyingResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.qualifyingResults.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
                     item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
@@ -186,8 +180,6 @@ class F1ChampionshipRepository {
                 val root = service.getSprintResults(round)
                 val raw = root.mrData?.raceTable?.races?.firstOrNull()?.sprintResults.orEmpty()
                 val metadata = getDriverMetadata()
-                val headshots = metadata.headshots
-                val colors = metadata.driverColors
                 raw.map { item ->
                     item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }

@@ -12,6 +12,12 @@ import com.example.data.model.SeasonRaceItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,6 +27,25 @@ import java.util.Calendar
 import java.util.Locale
 
 class F1ChampionshipRepository {
+
+    /** Await OkHttp without blocking an IO thread and cancel the call with its coroutine. */
+    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { cancel() }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, error: java.io.IOException) {
+                continuation.resumeWith(Result.failure(error))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val token = continuation.tryResume(response)
+                if (token != null) {
+                    continuation.completeResume(token)
+                } else {
+                    response.close()
+                }
+            }
+        })
+    }
 
     /** Preserve structured cancellation instead of converting it into a normal failed Result. */
     private suspend fun <T> cancellableResult(block: suspend () -> T): Result<T> = try {
@@ -42,15 +67,18 @@ class F1ChampionshipRepository {
     @Volatile
     private var cachedDriverMetadata: DriverMetadata? = null
 
-    @Synchronized
-    private fun getDriverMetadata(): DriverMetadata {
+    private val driverMetadataMutex = Mutex()
+
+    private suspend fun getDriverMetadata(): DriverMetadata = driverMetadataMutex.withLock {
         val existing = cachedDriverMetadata
-        if (existing != null && (existing.headshots.isNotEmpty() || existing.driverColors.isNotEmpty())) return existing
+        if (existing != null && (existing.headshots.isNotEmpty() || existing.driverColors.isNotEmpty())) {
+            return@withLock existing
+        }
         val fetched = fetchDriverMetadataFromApi()
         if (fetched.headshots.isNotEmpty() || fetched.driverColors.isNotEmpty()) {
             cachedDriverMetadata = fetched
         }
-        return fetched
+        fetched
     }
 
     suspend fun fetchDriverStandings(): Result<Pair<String, List<DriverStandingItem>>> =
@@ -203,14 +231,14 @@ class F1ChampionshipRepository {
             }
         }
 
-    private fun fetchDriverMetadataFromApi(): DriverMetadata {
+    private suspend fun fetchDriverMetadataFromApi(): DriverMetadata {
         val headshotsMap = mutableMapOf<String, String>()
         val driverColorsMap = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
         try {
             val req = Request.Builder()
                 .url("https://api.openf1.org/v1/drivers?session_key=latest")
                 .build()
-            httpClient.newCall(req).execute().use { resp ->
+            httpClient.newCall(req).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -253,7 +281,11 @@ class F1ChampionshipRepository {
                     }
                 }
             }
-        } catch (_: Exception) { }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            android.util.Log.w("F1ChampionshipRepository", "Driver metadata request failed (${error.javaClass.simpleName})")
+        }
         return DriverMetadata(headshotsMap, driverColorsMap)
     }
 
@@ -302,7 +334,7 @@ class F1ChampionshipRepository {
     private fun querySessionKey(url: String, raceDate: String): Int? {
         return try {
             val req = Request.Builder().url(url).build()
-            httpClient.newCall(req).execute().use { resp ->
+            httpClient.newCall(req).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return null
                 val body = resp.body?.string().orEmpty()
                 if (!body.startsWith("[")) return null
@@ -357,7 +389,7 @@ class F1ChampionshipRepository {
             // Fetch drivers for this session
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()
             val driversMap = mutableMapOf<Int, JSONObject>()
-            httpClient.newCall(driversReq).execute().use { resp ->
+            httpClient.newCall(driversReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -376,7 +408,7 @@ class F1ChampionshipRepository {
             val bestLapMap = mutableMapOf<Int, JSONObject>()
             val lapCountMap = mutableMapOf<Int, Int>()
 
-            httpClient.newCall(lapsReq).execute().use { resp ->
+            httpClient.newCall(lapsReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -485,7 +517,7 @@ class F1ChampionshipRepository {
 
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()
             val driversMap = mutableMapOf<Int, JSONObject>()
-            httpClient.newCall(driversReq).execute().use { resp ->
+            httpClient.newCall(driversReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {
@@ -503,7 +535,7 @@ class F1ChampionshipRepository {
             val lapsReq = Request.Builder().url("https://api.openf1.org/v1/laps?session_key=$sessionKey").build()
             val validLaps = mutableListOf<LapEntry>()
 
-            httpClient.newCall(lapsReq).execute().use { resp ->
+            httpClient.newCall(lapsReq).awaitResponse().use { resp ->
                 if (resp.isSuccessful) {
                     val body = resp.body?.string().orEmpty()
                     if (body.startsWith("[")) {

@@ -80,6 +80,34 @@ class F1ChampionshipRepository {
         fetched
     }
 
+    private fun enrichDriver(
+        driver: F1Driver?,
+        constructor: F1Constructor?,
+        metadata: DriverMetadata
+    ): F1Driver? {
+        if (driver == null) return null
+        val code = driver.code?.uppercase().orEmpty()
+        val number = driver.permanentNumber.orEmpty()
+        val familyName = driver.familyName?.lowercase().orEmpty()
+        val headshot = driver.headshotUrl
+            ?: metadata.headshots[code]
+            ?: metadata.headshots[number]
+            ?: metadata.headshots[familyName]
+        val driverColor = metadata.driverColors[code]
+            ?: metadata.driverColors[number]
+            ?: metadata.driverColors[familyName]
+
+        if (driverColor != null) {
+            constructor?.constructorId?.takeIf { it.isNotBlank() }?.let {
+                com.example.ui.theme.TeamColors.registerColor(it, driverColor)
+            }
+            constructor?.name?.takeIf { it.isNotBlank() }?.let {
+                com.example.ui.theme.TeamColors.registerColor(it, driverColor)
+            }
+        }
+        return driver.copy(headshotUrl = headshot)
+    }
+
     suspend fun fetchDriverStandings(): Result<Pair<String, List<DriverStandingItem>>> =
         withContext(Dispatchers.IO) {
             cancellableResult {
@@ -93,33 +121,8 @@ class F1ChampionshipRepository {
                 val driverColorsMap = metadata.driverColors
 
                 val enrichedList = rawList.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val number = item.driver?.permanentNumber.orEmpty()
-                    val familyName = item.driver?.familyName?.lowercase().orEmpty()
-
-                    val headshot = item.driver?.headshotUrl
-                        ?: headshotsMap[code]
-                        ?: headshotsMap[number]
-                        ?: headshotsMap[familyName]
-
-                    // Infer constructor colors directly from the drivers' colors
-                    val driverColor = driverColorsMap[code]
-                        ?: driverColorsMap[number]
-                        ?: driverColorsMap[familyName]
-
-                    if (driverColor != null) {
-                        val constructorId = item.constructors?.firstOrNull()?.constructorId
-                        val constructorName = item.constructors?.firstOrNull()?.name
-                        if (!constructorId.isNullOrBlank()) {
-                            com.example.ui.theme.TeamColors.registerColor(constructorId, driverColor)
-                        }
-                        if (!constructorName.isNullOrBlank()) {
-                            com.example.ui.theme.TeamColors.registerColor(constructorName, driverColor)
-                        }
-                    }
-
-                    val enrichedDriver = item.driver?.copy(headshotUrl = headshot)
-                    item.copy(driver = enrichedDriver, headshotUrl = headshot)
+                    val enrichedDriver = enrichDriver(item.driver, item.constructors?.firstOrNull(), metadata)
+                    item.copy(driver = enrichedDriver, headshotUrl = enrichedDriver?.headshotUrl)
                 }
 
                 Pair(season, enrichedList)
@@ -158,20 +161,7 @@ class F1ChampionshipRepository {
                 val headshots = metadata.headshots
                 val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }
@@ -185,20 +175,7 @@ class F1ChampionshipRepository {
                 val headshots = metadata.headshots
                 val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }
@@ -212,20 +189,7 @@ class F1ChampionshipRepository {
                 val headshots = metadata.headshots
                 val colors = metadata.driverColors
                 raw.map { item ->
-                    val code = item.driver?.code?.uppercase().orEmpty()
-                    val num = item.driver?.permanentNumber.orEmpty()
-                    val last = item.driver?.familyName?.lowercase().orEmpty()
-                    val photo = item.driver?.headshotUrl ?: headshots[code] ?: headshots[num] ?: headshots[last]
-
-                    val driverColor = colors[code] ?: colors[num] ?: colors[last]
-                    if (driverColor != null) {
-                        val cId = item.constructor?.constructorId
-                        val cName = item.constructor?.name
-                        if (!cId.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cId, driverColor)
-                        if (!cName.isNullOrBlank()) com.example.ui.theme.TeamColors.registerColor(cName, driverColor)
-                    }
-
-                    item.copy(driver = item.driver?.copy(headshotUrl = photo))
+                    item.copy(driver = enrichDriver(item.driver, item.constructor, metadata))
                 }
             }
         }

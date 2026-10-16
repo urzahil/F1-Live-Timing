@@ -1,6 +1,0 @@
-{
-  "summary": "Architectural implementation plan for F1 Live Timing Android application and Docker backend deployment. Includes live timing telemetry, dynamic session support (Race, Practice, Qualifying), tyre history, meteo status, driver and constructor standings, current season calendar, and Docker container configuration.",
-  "updatedAt": "2026-10-14T12:56:03.684898737Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

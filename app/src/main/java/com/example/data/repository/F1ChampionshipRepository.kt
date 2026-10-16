@@ -9,6 +9,7 @@ import com.example.data.model.PracticeTimingItem
 import com.example.data.model.QualifyingResultItem
 import com.example.data.model.RaceResultItem
 import com.example.data.model.SeasonRaceItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -20,6 +21,15 @@ import java.util.Locale
 
 class F1ChampionshipRepository {
 
+    /** Preserve structured cancellation instead of converting it into a normal failed Result. */
+    private suspend fun <T> cancellableResult(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Result.failure(error)
+    }
+
     private val service = NetworkClient.jolpicaService
     private val httpClient = NetworkClient.okHttpClient
 
@@ -28,8 +38,10 @@ class F1ChampionshipRepository {
         val driverColors: Map<String, androidx.compose.ui.graphics.Color>
     )
 
+    @Volatile
     private var cachedDriverMetadata: DriverMetadata? = null
 
+    @Synchronized
     private fun getDriverMetadata(): DriverMetadata {
         val existing = cachedDriverMetadata
         if (existing != null && existing.headshots.isNotEmpty()) return existing
@@ -42,7 +54,7 @@ class F1ChampionshipRepository {
 
     suspend fun fetchDriverStandings(): Result<Pair<String, List<DriverStandingItem>>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            cancellableResult {
                 val root = service.getCurrentDriverStandings()
                 val season = root.mrData?.standingsTable?.season.orEmpty()
                 val rawList = root.mrData?.standingsTable?.standingsLists?.firstOrNull()?.driverStandings.orEmpty()
@@ -337,7 +349,7 @@ class F1ChampionshipRepository {
     ): Result<List<PracticeTimingItem>> = withContext(Dispatchers.IO) {
         runCatching {
             val sessionKey = findOpenF1SessionKey(year, country, raceDate, sessionName)
-                ?: return@runCatching emptyList()
+                ?: return@cancellableResult emptyList()
 
             // Fetch drivers for this session
             val driversReq = Request.Builder().url("https://api.openf1.org/v1/drivers?session_key=$sessionKey").build()

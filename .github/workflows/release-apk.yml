@@ -1,26 +1,21 @@
-name: Build Release APK
+name: Build F1 Release APK
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-
-concurrency:
-  group: release-apk-${{ github.ref }}
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  build-release:
-    name: Build signed release APK
+  release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
-      - name: Check out source
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -58,9 +53,6 @@ jobs:
           test -s "$keystore_path"
           echo "KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
 
-      # The default branch currently hard-codes the key alias as "upload".
-      # Adapt only the runner's checkout so this workflow also supports the configured secret;
-      # no Gradle source change is committed to the repository.
       - name: Apply signing alias from secret in runner workspace
         shell: bash
         env:
@@ -80,7 +72,7 @@ jobs:
               path.write_text(source)
           PY
 
-      - name: Build signed release APK
+      - name: Build release APK
         env:
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -100,4 +92,4 @@ jobs:
           name: F1-release-${{ github.run_number }}
           path: ${{ runner.temp }}/F1-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

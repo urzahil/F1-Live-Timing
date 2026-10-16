@@ -37,9 +37,8 @@ class F1ChampionshipRepository {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                val token = continuation.tryResume(response)
-                if (token != null) {
-                    continuation.completeResume(token)
+                if (continuation.isActive) {
+                    continuation.resumeWith(Result.success(response))
                 } else {
                     response.close()
                 }

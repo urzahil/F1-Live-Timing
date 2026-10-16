@@ -17,6 +17,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class F1ChampionshipRepository {
@@ -44,7 +45,7 @@ class F1ChampionshipRepository {
     @Synchronized
     private fun getDriverMetadata(): DriverMetadata {
         val existing = cachedDriverMetadata
-        if (existing != null && existing.headshots.isNotEmpty()) return existing
+        if (existing != null && (existing.headshots.isNotEmpty() || existing.driverColors.isNotEmpty())) return existing
         val fetched = fetchDriverMetadataFromApi()
         if (fetched.headshots.isNotEmpty() || fetched.driverColors.isNotEmpty()) {
             cachedDriverMetadata = fetched
@@ -268,7 +269,9 @@ class F1ChampionshipRepository {
     private fun findOpenF1SessionKey(year: String, country: String, raceDate: String, sessionName: String): Int? {
         val mappedCountry = URLEncoder.encode(mapCountryForOpenF1(country), "UTF-8")
         val encSessionName = URLEncoder.encode(sessionName, "UTF-8")
-        val y = if (year.isBlank() || year.equals("current", ignoreCase = true)) "2026" else year
+        val y = if (year.isBlank() || year.equals("current", ignoreCase = true)) {
+            Calendar.getInstance().get(Calendar.YEAR).toString()
+        } else year
 
         // 1. Try with year
         val keyWithYear = querySessionKey("https://api.openf1.org/v1/sessions?year=$y&country_name=$mappedCountry&session_name=$encSessionName", raceDate)

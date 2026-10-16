@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">F1 Live Timing</string>
+    <string name="tab_live_timing">Live Timing</string>
+    <string name="tab_standings">Standings</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="session_active">LIVE SESSION</string>
+    <string name="session_inactive">OFFLINE / NO ACTIVE SESSION</string>
+    <string name="backend_settings">Backend Settings</string>
+    <string name="docker_guide">Docker Guide</string>
+    <string name="refresh">Refresh</string>
+    <string name="gap_to_leader">GAP</string>
+    <string name="interval_ahead">INTERVAL</string>
+    <string name="best_lap">BEST LAP</string>
+    <string name="tyres">TYRES</string>
+    <string name="pits">PITS</string>
+    <string name="weather_title">Track Weather</string>
+    <string name="driver_standings">Drivers</string>
+    <string name="constructor_standings">Constructors</string>
+</resources>

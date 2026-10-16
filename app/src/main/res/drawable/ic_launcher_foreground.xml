@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Speed Trails -->
+        <path
+            android:fillColor="#E10600"
+            android:pathData="M24,42 L52,42 L48,46 L20,46 Z" />
+        <path
+            android:fillColor="#E10600"
+            android:pathData="M20,50 L64,50 L60,54 L16,54 Z" />
+        <path
+            android:fillColor="#FF3333"
+            android:pathData="M24,58 L54,58 L50,62 L20,62 Z" />
+        
+        <!-- F1 Car Silhouette / Front Wing & Cockpit -->
+        <!-- Rear Wing -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M32,38 L37,38 L35,66 L30,66 Z" />
+        <!-- Engine Cover & Cockpit -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M36,50 L56,46 L62,49 L76,51 L84,52 L84,54 L76,55 L62,55 L56,58 L36,54 Z" />
+        <!-- Halo & Driver Helmet Indicator -->
+        <path
+            android:fillColor="#E10600"
+            android:pathData="M54,49 C54,47 56,46 58,46 C60,46 61,47 61,49 C61,51 60,52 58,52 C56,52 54,51 54,49 Z" />
+        <!-- Front Nose and Wing -->
+        <path
+            android:fillColor="#E10600"
+            android:pathData="M84,48 L88,48 L87,56 L83,56 Z" />
+        <!-- Front & Rear Wheels -->
+        <path
+            android:fillColor="#222831"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.5"
+            android:pathData="M38,36 A5,5 0 1,1 38,46 A5,5 0 1,1 38,36 Z" />
+        <path
+            android:fillColor="#222831"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.5"
+            android:pathData="M38,58 A5,5 0 1,1 38,68 A5,5 0 1,1 38,58 Z" />
+        <path
+            android:fillColor="#222831"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.5"
+            android:pathData="M74,38 A4.5,4.5 0 1,1 74,47 A4.5,4.5 0 1,1 74,38 Z" />
+        <path
+            android:fillColor="#222831"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.5"
+            android:pathData="M74,57 A4.5,4.5 0 1,1 74,66 A4.5,4.5 0 1,1 74,57 Z" />
+        <!-- Live Timing Telemetry Dot (Speed / Live Pulse) -->
+        <path
+            android:fillColor="#00E676"
+            android:pathData="M88,40 A2.5,2.5 0 1,1 88,45 A2.5,2.5 0 1,1 88,40 Z" />
+    </group>
+</vector>

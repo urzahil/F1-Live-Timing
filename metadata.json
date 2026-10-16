@@ -1,0 +1,6 @@
+{
+  "name": "F1 Live Timing",
+  "description": "Real-time Formula 1 live timing, driver gaps, tyre stint histories, track weather, and season championship standings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  f1-livetiming-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: f1-livetiming-api:latest
+    container_name: f1-livetiming-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

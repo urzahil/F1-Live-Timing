@@ -1,0 +1,103 @@
+name: Build Release APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: Build signed release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.8.1'
+
+      - name: Validate signing secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Required repository secret $name is missing."
+              exit 1
+            fi
+          done
+
+      - name: Decode signing keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          keystore_path="$RUNNER_TEMP/F1-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          test -s "$keystore_path"
+          echo "KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      # The default branch currently hard-codes the key alias as "upload".
+      # Adapt only the runner's checkout so this workflow also supports the configured secret;
+      # no Gradle source change is committed to the repository.
+      - name: Apply signing alias from secret in runner workspace
+        shell: bash
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/build.gradle.kts")
+          source = path.read_text()
+          old = 'keyAlias = "upload"'
+          new = 'keyAlias = System.getenv("KEY_ALIAS") ?: "upload"'
+          if new not in source:
+              if old not in source:
+                  raise SystemExit("Could not find the expected release keyAlias declaration.")
+              source = source.replace(old, new, 1)
+              path.write_text(source)
+          PY
+
+      - name: Build signed release APK
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Rename release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/F1-release.apk"
+
+      - name: Upload signed release APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: F1-release-${{ github.run_number }}
+          path: ${{ runner.temp }}/F1-release.apk
+          if-no-files-found: error
+          retention-days: 14

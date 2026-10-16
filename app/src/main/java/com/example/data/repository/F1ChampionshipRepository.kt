@@ -253,7 +253,7 @@ class F1ChampionshipRepository {
         }
     }
 
-    private fun findOpenF1SessionKey(year: String, country: String, raceDate: String, sessionName: String): Int? {
+    private suspend fun findOpenF1SessionKey(year: String, country: String, raceDate: String, sessionName: String): Int? {
         val mappedCountry = URLEncoder.encode(mapCountryForOpenF1(country), "UTF-8")
         val encSessionName = URLEncoder.encode(sessionName, "UTF-8")
         val y = if (year.isBlank() || year.equals("current", ignoreCase = true)) {
@@ -286,7 +286,7 @@ class F1ChampionshipRepository {
         return null
     }
 
-    private fun querySessionKey(url: String, raceDate: String): Int? {
+    private suspend fun querySessionKey(url: String, raceDate: String): Int? {
         return try {
             val req = Request.Builder().url(url).build()
             httpClient.newCall(req).awaitResponse().use { resp ->

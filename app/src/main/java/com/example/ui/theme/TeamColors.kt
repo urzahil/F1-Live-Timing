@@ -41,12 +41,8 @@ object TeamColors {
             runtimeColorMap[normalized]?.let { return it }
         }
 
-        // Fuzzy match: check if key contains or is contained in registered key
-        for ((k, color) in runtimeColorMap) {
-            if (k.length >= 3 && (raw.contains(k) || k.contains(raw) || (normalized.isNotBlank() && (normalized.contains(k) || k.contains(normalized))))) {
-                return color
-            }
-        }
+        // Avoid substring matching: short driver identifiers can otherwise inherit another
+        // team's color (for example, overlapping names or acronyms).
 
         // Derive dynamic distinct color from hash code at runtime (zero hardcoding)
         return deriveDynamicColor(identifier)

@@ -1,7 +1,7 @@
 package com.example.ui.theme
 
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.Color
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 /**
@@ -12,7 +12,7 @@ import kotlin.math.abs
  */
 object TeamColors {
 
-    private val runtimeColorMap = ConcurrentHashMap<String, Color>()
+    private val runtimeColorMap = mutableStateMapOf<String, Color>()
 
     fun registerColor(identifier: String?, color: Color?) {
         if (identifier.isNullOrBlank() || color == null) return

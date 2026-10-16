@@ -194,6 +194,7 @@ private fun GrandPrixCalendarList(
             if (season.isNotBlank()) {
                 Box(
                     modifier = Modifier
+                        .width(56.dp)
                         .background(F1Red, RoundedCornerShape(4.dp))
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {

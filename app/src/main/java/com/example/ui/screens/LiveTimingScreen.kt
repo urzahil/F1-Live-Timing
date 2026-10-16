@@ -36,7 +36,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -157,16 +156,6 @@ fun LiveTimingScreen(
             // Table Header Bar (POS, DRIVER, TYRE, BEST LAP, LAST LAP, GAP)
             TableHeaderRow()
 
-            val fastestDriverNumber = remember(liveTimings) {
-                liveTimings
-                    .mapNotNull { d ->
-                        val sec = com.example.data.repository.F1LiveRepository().parseLapTimeToSeconds(d.bestLapTime)
-                        if (sec != null && sec > 0.0) Pair(d.racingNumber, sec) else null
-                    }
-                    .minByOrNull { it.second }
-                    ?.first
-            }
-
             // Live Telemetry Driver Leaderboard
             LazyColumn(
                 modifier = Modifier
@@ -174,13 +163,12 @@ fun LiveTimingScreen(
                     .padding(horizontal = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(liveTimings, key = { it.racingNumber + it.position }) { driver ->
-                    val isOverallFastest = driver.isOverallBestLap ||
-                            (fastestDriverNumber != null && driver.racingNumber == fastestDriverNumber)
-
+                // Key on identity only: a key that includes the position collides (car 1 in P11 vs
+                // car 11 in P1) and crashes the list, and it recreates rows on every overtake.
+                items(liveTimings, key = { it.racingNumber.ifBlank { it.driverCode } }) { driver ->
                     DriverTimingRow(
                         driver = driver,
-                        isFastestLap = isOverallFastest,
+                        isFastestLap = driver.isOverallBestLap,
                         onClick = { onSelectDriver(driver) }
                     )
                 }

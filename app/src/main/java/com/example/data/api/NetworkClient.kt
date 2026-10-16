@@ -2,7 +2,6 @@ package com.example.data.api
 
 import android.util.Log
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -14,9 +13,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 object NetworkClient {
 
-    private val moshi: Moshi = Moshi.Builder()
-        .addLast(KotlinJsonAdapterFactory())
-        .build()
+    // All API models use @JsonClass(generateAdapter = true), so no reflection adapter is needed.
+    private val moshi: Moshi = Moshi.Builder().build()
 
     private const val TAG = "F1Network"
 

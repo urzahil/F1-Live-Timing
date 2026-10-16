@@ -122,11 +122,7 @@ fun MainContent(viewModel: F1ViewModel) {
 
     val selectedCalendarRace by viewModel.selectedCalendarRace.collectAsStateWithLifecycle()
     val selectedSessionType by viewModel.selectedSessionType.collectAsStateWithLifecycle()
-    val raceResults by viewModel.raceResults.collectAsStateWithLifecycle()
-    val qualifyingResults by viewModel.qualifyingResults.collectAsStateWithLifecycle()
-    val sprintResults by viewModel.sprintResults.collectAsStateWithLifecycle()
-    val sprintQualifyingResults by viewModel.sprintQualifyingResults.collectAsStateWithLifecycle()
-    val practiceTimings by viewModel.practiceTimings.collectAsStateWithLifecycle()
+    val sessionResults by viewModel.sessionResults.collectAsStateWithLifecycle()
     val isSessionResultsLoading by viewModel.isSessionResultsLoading.collectAsStateWithLifecycle()
     val sessionResultsError by viewModel.sessionResultsError.collectAsStateWithLifecycle()
 
@@ -312,11 +308,11 @@ fun MainContent(viewModel: F1ViewModel) {
                         races = calendarRaces,
                         selectedRace = selectedCalendarRace,
                         selectedSessionType = selectedSessionType,
-                        raceResults = raceResults,
-                        qualifyingResults = qualifyingResults,
-                        sprintResults = sprintResults,
-                        sprintQualifyingResults = sprintQualifyingResults,
-                        practiceTimings = practiceTimings,
+                        raceResults = sessionResults.race,
+                        qualifyingResults = sessionResults.qualifying,
+                        sprintResults = sessionResults.sprint,
+                        sprintQualifyingResults = sessionResults.sprintQualifying,
+                        practiceTimings = sessionResults.practice,
                         isResultsLoading = isSessionResultsLoading,
                         resultsError = sessionResultsError,
                         isLoading = isCalendarLoading,

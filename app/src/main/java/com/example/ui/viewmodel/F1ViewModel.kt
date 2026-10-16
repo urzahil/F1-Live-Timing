@@ -15,6 +15,7 @@ import com.example.data.model.SeasonRaceItem
 import com.example.data.model.WeekendSessionType
 import com.example.data.repository.F1ChampionshipRepository
 import com.example.data.repository.CalendarResultsCache
+import com.example.data.repository.ExpiringListCache
 import com.example.data.repository.ParsedDriverTiming
 import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
@@ -24,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -39,6 +41,15 @@ enum class StandingsCategory {
     DRIVERS,
     CONSTRUCTORS
 }
+
+/** Results for the selected race weekend, one list per session type. */
+data class SessionResultsState(
+    val race: List<RaceResultItem> = emptyList(),
+    val qualifying: List<QualifyingResultItem> = emptyList(),
+    val sprint: List<RaceResultItem> = emptyList(),
+    val sprintQualifying: List<QualifyingResultItem> = emptyList(),
+    val practice: List<PracticeTimingItem> = emptyList()
+)
 
 class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -137,20 +148,8 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private val _sessionResultsError = MutableStateFlow<String?>(null)
     val sessionResultsError: StateFlow<String?> = _sessionResultsError.asStateFlow()
 
-    private val _raceResults = MutableStateFlow<List<RaceResultItem>>(emptyList())
-    val raceResults: StateFlow<List<RaceResultItem>> = _raceResults.asStateFlow()
-
-    private val _qualifyingResults = MutableStateFlow<List<QualifyingResultItem>>(emptyList())
-    val qualifyingResults: StateFlow<List<QualifyingResultItem>> = _qualifyingResults.asStateFlow()
-
-    private val _sprintResults = MutableStateFlow<List<RaceResultItem>>(emptyList())
-    val sprintResults: StateFlow<List<RaceResultItem>> = _sprintResults.asStateFlow()
-
-    private val _sprintQualifyingResults = MutableStateFlow<List<QualifyingResultItem>>(emptyList())
-    val sprintQualifyingResults: StateFlow<List<QualifyingResultItem>> = _sprintQualifyingResults.asStateFlow()
-
-    private val _practiceTimings = MutableStateFlow<List<PracticeTimingItem>>(emptyList())
-    val practiceTimings: StateFlow<List<PracticeTimingItem>> = _practiceTimings.asStateFlow()
+    private val _sessionResults = MutableStateFlow(SessionResultsState())
+    val sessionResults: StateFlow<SessionResultsState> = _sessionResults.asStateFlow()
 
     private val calendarResultsCache = CalendarResultsCache()
 
@@ -358,20 +357,16 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectCalendarRace(race: SeasonRaceItem?, initialSession: WeekendSessionType = WeekendSessionType.RACE) {
+        sessionResultsJob?.cancel()
+        sessionResultsJob = null
         _selectedCalendarRace.value = race
+        // Results belong to a single race: never let the previous race's lists show for the next one.
+        _sessionResults.value = SessionResultsState()
+        _sessionResultsError.value = null
+        _isSessionResultsLoading.value = false
         if (race != null) {
             _selectedSessionType.value = initialSession
             loadSessionResultsForSelectedRace(initialSession)
-        } else {
-            sessionResultsJob?.cancel()
-            sessionResultsJob = null
-            _isSessionResultsLoading.value = false
-            _raceResults.value = emptyList()
-            _qualifyingResults.value = emptyList()
-            _sprintResults.value = emptyList()
-            _sprintQualifyingResults.value = emptyList()
-            _practiceTimings.value = emptyList()
-            _sessionResultsError.value = null
         }
     }
 
@@ -386,164 +381,93 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadSessionResultsForSelectedRace(type: WeekendSessionType) {
         sessionResultsJob?.cancel()
+        sessionResultsJob = null
         _isSessionResultsLoading.value = false
         _sessionResultsError.value = null
         val race = _selectedCalendarRace.value ?: return
         val round = race.round.orEmpty()
         if (round.isBlank()) return
-        val resultCacheKey = "${race.season.orEmpty().ifBlank { _calendarSeason.value }}:$round"
+        val season = race.season.orEmpty().ifBlank { _calendarSeason.value }
+        val country = race.circuit?.location?.country.orEmpty()
+        val cacheKey = "$season:$round"
 
         when (type) {
-            WeekendSessionType.RACE -> {
-                val cached = calendarResultsCache.race[resultCacheKey]
-                if (cached != null) {
-                    _raceResults.value = cached
-                    _sessionResultsError.value = null
-                    return
-                }
-                sessionResultsJob = viewModelScope.launch {
-                    _isSessionResultsLoading.value = true
-                    _sessionResultsError.value = null
-                    val res = championshipRepo.fetchRaceResults(round)
-                    res.onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            calendarResultsCache.race[resultCacheKey] = list
-                            _raceResults.value = list
-                        } else if (_raceResults.value.isEmpty()) {
-                            _raceResults.value = emptyList()
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Race results request failed (${error.javaClass.simpleName})")
-                        _raceResults.value = emptyList()
-                        _sessionResultsError.value = "Unable to load race results. Please try again."
-                    }
-                    _isSessionResultsLoading.value = false
-                }
-            }
-            WeekendSessionType.QUALIFYING -> {
-                val cached = calendarResultsCache.qualifying[resultCacheKey]
-                if (cached != null) {
-                    _qualifyingResults.value = cached
-                    _sessionResultsError.value = null
-                    return
-                }
-                sessionResultsJob = viewModelScope.launch {
-                    _isSessionResultsLoading.value = true
-                    _sessionResultsError.value = null
-                    val res = championshipRepo.fetchQualifyingResults(round)
-                    res.onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            calendarResultsCache.qualifying[resultCacheKey] = list
-                            _qualifyingResults.value = list
-                        } else if (_qualifyingResults.value.isEmpty()) {
-                            _qualifyingResults.value = emptyList()
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Qualifying results request failed (${error.javaClass.simpleName})")
-                        _qualifyingResults.value = emptyList()
-                        _sessionResultsError.value = "Unable to load qualifying results. Please try again."
-                    }
-                    _isSessionResultsLoading.value = false
-                }
-            }
-            WeekendSessionType.SPRINT -> {
-                val cached = calendarResultsCache.sprint[resultCacheKey]
-                if (cached != null) {
-                    _sprintResults.value = cached
-                    _sessionResultsError.value = null
-                    return
-                }
-                sessionResultsJob = viewModelScope.launch {
-                    _isSessionResultsLoading.value = true
-                    _sessionResultsError.value = null
-                    val res = championshipRepo.fetchSprintResults(round)
-                    res.onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            calendarResultsCache.sprint[resultCacheKey] = list
-                            _sprintResults.value = list
-                        } else if (_sprintResults.value.isEmpty()) {
-                            _sprintResults.value = emptyList()
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Sprint results request failed (${error.javaClass.simpleName})")
-                        _sprintResults.value = emptyList()
-                        _sessionResultsError.value = "Unable to load sprint results. Please try again."
-                    }
-                    _isSessionResultsLoading.value = false
-                }
-            }
+            WeekendSessionType.RACE -> loadResults(
+                label = "race results",
+                cache = calendarResultsCache.race,
+                cacheKey = cacheKey,
+                store = { state, list -> state.copy(race = list) }
+            ) { championshipRepo.fetchRaceResults(round) }
+
+            WeekendSessionType.QUALIFYING -> loadResults(
+                label = "qualifying results",
+                cache = calendarResultsCache.qualifying,
+                cacheKey = cacheKey,
+                store = { state, list -> state.copy(qualifying = list) }
+            ) { championshipRepo.fetchQualifyingResults(round) }
+
+            WeekendSessionType.SPRINT -> loadResults(
+                label = "sprint results",
+                cache = calendarResultsCache.sprint,
+                cacheKey = cacheKey,
+                store = { state, list -> state.copy(sprint = list) }
+            ) { championshipRepo.fetchSprintResults(round) }
+
             WeekendSessionType.SPRINT_QUALIFYING -> {
-                val cached = calendarResultsCache.sprintQualifying[resultCacheKey]
-                if (cached != null) {
-                    _sprintQualifyingResults.value = cached
-                    _sessionResultsError.value = null
-                    return
-                }
-                sessionResultsJob = viewModelScope.launch {
-                    _isSessionResultsLoading.value = true
-                    _sessionResultsError.value = null
-                    val year = race.season.orEmpty().ifBlank { _calendarSeason.value }
-                    val country = race.circuit?.location?.country.orEmpty()
-                    val raceDate = race.sprintQualifying?.date ?: race.sprintShootout?.date ?: race.date.orEmpty()
-                    val res = championshipRepo.fetchSprintQualifyingResults(year, country, raceDate)
-                    res.onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            calendarResultsCache.sprintQualifying[resultCacheKey] = list
-                            _sprintQualifyingResults.value = list
-                        } else {
-                            _sprintQualifyingResults.value = emptyList()
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Sprint qualifying results request failed (${error.javaClass.simpleName})")
-                        _sprintQualifyingResults.value = emptyList()
-                        _sessionResultsError.value = "Unable to load sprint qualifying results. Please try again."
-                    }
-                    _isSessionResultsLoading.value = false
-                }
+                val date = race.sprintQualifying?.date ?: race.sprintShootout?.date ?: race.date.orEmpty()
+                loadResults(
+                    label = "sprint qualifying results",
+                    cache = calendarResultsCache.sprintQualifying,
+                    cacheKey = cacheKey,
+                    store = { state, list -> state.copy(sprintQualifying = list) }
+                ) { championshipRepo.fetchSprintQualifyingResults(season, country, date) }
             }
+
             WeekendSessionType.FP1,
             WeekendSessionType.FP2,
             WeekendSessionType.FP3 -> {
-                val cacheKey = "$resultCacheKey-${type.name}"
-                val cached = calendarResultsCache.practice[cacheKey]
-                if (cached != null) {
-                    _practiceTimings.value = cached
-                    _sessionResultsError.value = null
-                    return
+                val (sessionName, scheduledDate) = when (type) {
+                    WeekendSessionType.FP1 -> "Practice 1" to race.firstPractice?.date
+                    WeekendSessionType.FP2 -> "Practice 2" to race.secondPractice?.date
+                    else -> "Practice 3" to race.thirdPractice?.date
                 }
-                sessionResultsJob = viewModelScope.launch {
-                    _isSessionResultsLoading.value = true
-                    _sessionResultsError.value = null
-                    val sessionName = when (type) {
-                        WeekendSessionType.FP1 -> "Practice 1"
-                        WeekendSessionType.FP2 -> "Practice 2"
-                        WeekendSessionType.FP3 -> "Practice 3"
-                        else -> "Practice 1"
-                    }
-                    val sessionDate = when (type) {
-                        WeekendSessionType.FP1 -> race.firstPractice?.date ?: race.date.orEmpty()
-                        WeekendSessionType.FP2 -> race.secondPractice?.date ?: race.date.orEmpty()
-                        WeekendSessionType.FP3 -> race.thirdPractice?.date ?: race.date.orEmpty()
-                        else -> race.date.orEmpty()
-                    }
-                    val year = race.season.orEmpty().ifBlank { _calendarSeason.value }
-                    val country = race.circuit?.location?.country.orEmpty()
-                    val res = championshipRepo.fetchPracticeTimings(year, country, sessionDate, sessionName)
-                    res.onSuccess { list ->
-                        if (list.isNotEmpty()) {
-                            calendarResultsCache.practice[cacheKey] = list
-                            _practiceTimings.value = list
-                        } else if (_practiceTimings.value.isEmpty()) {
-                            _practiceTimings.value = emptyList()
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Practice timings request failed (${error.javaClass.simpleName})")
-                        _practiceTimings.value = emptyList()
-                        _sessionResultsError.value = "Unable to load practice timings. Please try again."
-                    }
-                    _isSessionResultsLoading.value = false
-                }
+                val date = scheduledDate ?: race.date.orEmpty()
+                loadResults(
+                    label = "practice timings",
+                    cache = calendarResultsCache.practice,
+                    cacheKey = "$cacheKey-${type.name}",
+                    store = { state, list -> state.copy(practice = list) }
+                ) { championshipRepo.fetchPracticeTimings(season, country, date, sessionName) }
             }
+        }
+    }
+
+    /**
+     * Shows [cache] hits immediately; otherwise fetches, stores non-empty replies in the cache and
+     * publishes the list (or an empty list plus an error message on failure) into [_sessionResults].
+     */
+    private fun <T> loadResults(
+        label: String,
+        cache: ExpiringListCache<String, T>,
+        cacheKey: String,
+        store: (SessionResultsState, List<T>) -> SessionResultsState,
+        fetch: suspend () -> Result<List<T>>
+    ) {
+        cache[cacheKey]?.let { cached ->
+            _sessionResults.update { store(it, cached) }
+            return
+        }
+        sessionResultsJob = viewModelScope.launch {
+            _isSessionResultsLoading.value = true
+            fetch().onSuccess { list ->
+                if (list.isNotEmpty()) cache[cacheKey] = list
+                _sessionResults.update { store(it, list) }
+            }.onFailure { error ->
+                Log.w(TAG, "Request for $label failed (${error.javaClass.simpleName})")
+                _sessionResults.update { store(it, emptyList()) }
+                _sessionResultsError.value = "Unable to load $label. Please try again."
+            }
+            _isSessionResultsLoading.value = false
         }
     }
 }

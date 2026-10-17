@@ -376,29 +376,26 @@ class F1LiveRepository {
         return result
     }
 
+    private val lapTimePattern = Regex("""^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$""")
+
+    /**
+     * Parses "ss.mmm", "m:ss.mmm" or "h:mm:ss.mmm". Anything else (placeholders such as "--" or
+     * "NO TIME", "NaN", exponent notation) is rejected rather than guessed at.
+     */
     fun parseLapTimeToSeconds(timeStr: String): Double? {
-        val clean = timeStr.trim()
-        if (clean.isBlank() || clean == "--" || clean.contains("NO", ignoreCase = true)) return null
-        return try {
-            if (clean.contains(":")) {
-                val parts = clean.split(":")
-                if (parts.size == 2) {
-                    val min = parts[0].toDoubleOrNull() ?: return null
-                    val sec = parts[1].toDoubleOrNull() ?: return null
-                    min * 60.0 + sec
-                } else if (parts.size == 3) {
-                    val hr = parts[0].toDoubleOrNull() ?: return null
-                    val min = parts[1].toDoubleOrNull() ?: return null
-                    val sec = parts[2].toDoubleOrNull() ?: return null
-                    hr * 3600.0 + min * 60.0 + sec
-                } else null
-            } else {
-                clean.toDoubleOrNull()
-            }
-        } catch (_: Exception) {
-            null
+        val match = lapTimePattern.matchEntire(timeStr.trim()) ?: return null
+        val (first, second, last) = match.destructured
+        val seconds = last.toDoubleOrNull() ?: return null
+        return when {
+            first.isNotEmpty() && second.isNotEmpty() ->
+                first.toDouble() * 3600.0 + second.toDouble() * 60.0 + seconds
+            first.isNotEmpty() -> first.toDouble() * 60.0 + seconds
+            else -> seconds
         }
     }
+
+    private fun sectorValue(sectors: JSONArray?, index: Int): String =
+        sectors?.optJSONObject(index)?.optString("Value", "")?.trim().orEmpty().ifBlank { "--" }
 
     fun parseStandingsJson(
         raw: String,
@@ -495,9 +492,9 @@ class F1LiveRepository {
                 val lastLap = extractValue(d, "LastLapTime").trim().ifBlank { "--" }
 
                 val sectorsArray = d.optJSONArray("Sectors")
-                val s1 = sectorsArray?.optJSONObject(0)?.optString("Value", "--") ?: "--"
-                val s2 = sectorsArray?.optJSONObject(1)?.optString("Value", "--") ?: "--"
-                val s3 = sectorsArray?.optJSONObject(2)?.optString("Value", "--") ?: "--"
+                val s1 = sectorValue(sectorsArray, 0)
+                val s2 = sectorValue(sectorsArray, 1)
+                val s3 = sectorValue(sectorsArray, 2)
 
                 val inPit = d.optBoolean("InPit", false)
                 val isRetired = d.optBoolean("Retired", false)
@@ -573,7 +570,12 @@ class F1LiveRepository {
             Log.w(TAG, "Unable to parse standings data (${error.javaClass.simpleName})")
         }
 
-        val sortedList = list.sortedBy { it.position.toIntOrNull() ?: 999 }
+        // Unpositioned entries go last; among equals, running cars precede retired/stopped ones.
+        // sortedWith is stable, so feed order is kept for any remaining ties.
+        val sortedList = list.sortedWith(
+            compareBy<ParsedDriverTiming> { it.position.toIntOrNull() ?: Int.MAX_VALUE }
+                .thenBy { it.isRetired || it.isStopped }
+        )
 
         // Dynamically compute the overall fastest best lap of the session without hardcoding
         val overallFastestDriverNumber = sortedList

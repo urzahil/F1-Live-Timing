@@ -12,8 +12,8 @@ android {
     applicationId = "com.aistudio.f1timing.qxvrta"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.4.1"
+    versionCode = 6
+    versionName = "1.6.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -71,7 +71,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
+  implementation(libs.moshi)
   implementation(libs.okhttp)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

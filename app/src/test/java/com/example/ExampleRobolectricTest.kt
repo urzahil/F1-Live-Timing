@@ -152,4 +152,41 @@ class ExampleRobolectricTest {
     assertEquals(com.example.data.model.WeekendSessionType.QUALIFYING, sprintSessions[3].type)
     assertEquals(com.example.data.model.WeekendSessionType.RACE, sprintSessions[4].type)
   }
+
+  @Test
+  fun `lap time parser accepts valid formats and rejects placeholders`() {
+    val repo = F1LiveRepository()
+    assertEquals(83.456, repo.parseLapTimeToSeconds("1:23.456")!!, 0.0001)
+    assertEquals(59.9, repo.parseLapTimeToSeconds("59.900")!!, 0.0001)
+    assertEquals(3723.5, repo.parseLapTimeToSeconds("1:02:03.5")!!, 0.0001)
+    org.junit.Assert.assertNull(repo.parseLapTimeToSeconds("--"))
+    org.junit.Assert.assertNull(repo.parseLapTimeToSeconds(""))
+    org.junit.Assert.assertNull(repo.parseLapTimeToSeconds("NO TIME"))
+    org.junit.Assert.assertNull(repo.parseLapTimeToSeconds("NaN"))
+    org.junit.Assert.assertNull(repo.parseLapTimeToSeconds("1e3"))
+  }
+
+  @Test
+  fun `standings keep retired cars last, blank sectors as placeholders and flag fastest lap once`() {
+    val repo = F1LiveRepository()
+    val raw = """
+      [
+        {"RacingNumber":"11","Tla":"PER","Position":"1","BestLapTime":{"Value":"1:21.000"}},
+        {"RacingNumber":"1","Tla":"VER","Position":"11","BestLapTime":{"Value":"1:20.000"},
+         "Sectors":[{"Value":""},{"Value":"30.100"}]},
+        {"RacingNumber":"44","Tla":"HAM","Position":"11","Retired":true}
+      ]
+    """.trimIndent()
+
+    val timings = repo.parseStandingsJson(raw)
+
+    // Car 1 in P11 and car 11 in P1 must have distinct identities (used as list keys).
+    assertEquals(timings.size, timings.map { it.racingNumber }.toSet().size)
+    assertEquals(listOf("PER", "VER", "HAM"), timings.take(3).map { it.driverCode })
+    val ver = timings.first { it.racingNumber == "1" }
+    assertEquals("--", ver.sector1)
+    assertEquals("30.100", ver.sector2)
+    assertEquals("--", ver.sector3)
+    assertEquals(listOf("VER"), timings.filter { it.isOverallBestLap }.map { it.driverCode })
+  }
 }

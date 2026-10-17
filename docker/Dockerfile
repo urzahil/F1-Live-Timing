@@ -12,6 +12,12 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git .
 # Install production dependencies only (express, cors, ws)
 RUN npm install --omit=dev
 
+# Upstream server.js advertises /docs (startup log and 404 body) but never mounts it.
+# The prebuilt JSDoc site is committed in ./docs, so serve it statically before the 404 fallback.
+# The grep fails the build if upstream changes and the patch no longer applies.
+RUN sed -i "/^app.use((req, res) => {/i app.use('/docs', express.static(path.join(__dirname, '..', 'docs')));" src/server.js \
+ && grep -q "express.static" src/server.js
+
 ENV NODE_ENV=production
 ENV PORT=3000
 

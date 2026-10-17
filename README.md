@@ -7,19 +7,18 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 ## Features
 
 ### Timing
-- Live driver leaderboard with gaps and intervals, best laps and sector times.
-- Session status, lap count and race-control / track-status flags (green, yellow, red, SC, VSC).
-- Track weather: air and track temperature, humidity, pressure, wind and rain.
-- Per-driver tyre compounds and full stint history.
-- Adaptive polling: every 5 s while a session is live, every 60 s otherwise. You can pause or resume polling and refresh manually from the top bar.
-- Optional **Show Latest Session Data** setting, which shows the most recent session instead of an empty "no live session" state.
+- Live driver leaderboard with gaps and intervals, best laps and sector times
+- Session status, lap count and race-control / track-status flags (green, yellow, red, SC, VSC)
+- Track weather: air and track temperature, humidity, pressure, wind and rain
+- Per-driver tyre compounds and full stint history
+- Automatic polling every 5 s while a session is live
 
 ### Standings
-- Drivers' and constructors' championships for the current season.
+- Drivers' and constructors' championships for the current season
 
 ### Calendar
 - Season race calendar.
-- Per-weekend results for race, qualifying, sprint, sprint qualifying and practice timings.
+- Per-weekend results for race, qualifying, sprint, sprint qualifying and practice timings
 
 ## How it works
 

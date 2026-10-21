@@ -1,6 +1,13 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,8 +31,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -131,15 +136,9 @@ fun ServerSettingsDialog(
                             lineHeight = 14.sp
                         )
                     }
-                    Switch(
+                    CenteredSwitch(
                         checked = showLatestSession,
-                        onCheckedChange = onToggleShowLatestSession,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = F1Red,
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = F1PitWallSurface
-                        )
+                        onCheckedChange = onToggleShowLatestSession
                     )
                 }
 
@@ -236,4 +235,36 @@ fun ServerSettingsDialog(
             }
         }
     )
+}
+
+/**
+ * Fixed-geometry replacement for Material's Switch: the thumb is always vertically centered in
+ * the track, so it can't drift against the border at some display scales.
+ */
+@Composable
+private fun CenteredSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val trackWidth = 52.dp
+    val trackHeight = 32.dp
+    val thumbSize = 24.dp
+    val inset = (trackHeight - thumbSize) / 2
+    val thumbX by animateDpAsState(
+        targetValue = if (checked) trackWidth - thumbSize - inset else inset,
+        label = "switchThumb"
+    )
+    Box(
+        modifier = Modifier
+            .size(trackWidth, trackHeight)
+            .clip(CircleShape)
+            .background(if (checked) F1Red else F1PitWallSurface)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = thumbX)
+                .size(thumbSize)
+                .clip(CircleShape)
+                .background(if (checked) Color.White else Color.Gray)
+        )
+    }
 }

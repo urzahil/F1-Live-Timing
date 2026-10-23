@@ -480,12 +480,16 @@ class F1LiveRepository {
                     continue
                 }
 
+                // Races report GapToLeader/IntervalToPositionAhead; practice reports TimeDiffToFastest/
+                // TimeDiffToPositionAhead instead, and qualifying keeps them per part (Q1-Q3) in Stats.
                 val gapRaw = extractValue(d, "GapToLeader").trim()
+                    .ifBlank { extractValue(d, "TimeDiffToFastest").trim() }
+                    .ifBlank { latestQualifyingStat(d, "TimeDiffToFastest") }
                 val gapToLeader = if (gapRaw.isNotBlank()) gapRaw else if (pos == "1") "LEADER" else "--"
 
-                val intervalRaw = extractValue(d, "IntervalToPositionAhead").trim().ifBlank {
-                    d.optString("TimeDiffToPositionAhead", "").trim()
-                }
+                val intervalRaw = extractValue(d, "IntervalToPositionAhead").trim()
+                    .ifBlank { extractValue(d, "TimeDiffToPositionAhead").trim() }
+                    .ifBlank { latestQualifyingStat(d, "TimeDiffToPositionAhead") }
                 val intervalAhead = if (intervalRaw.isNotBlank()) intervalRaw else if (pos == "1") "-" else "--"
 
                 val bestLap = extractValue(d, "BestLapTime").trim().ifBlank { "--" }
@@ -597,6 +601,16 @@ class F1LiveRepository {
         } else {
             sortedList
         }
+    }
+
+    /** Value of [key] from the most recent qualifying part (last Stats entry) that has one. */
+    private fun latestQualifyingStat(obj: JSONObject, key: String): String {
+        val stats = obj.optJSONArray("Stats") ?: return ""
+        for (i in stats.length() - 1 downTo 0) {
+            val value = stats.optJSONObject(i)?.let { extractValue(it, key).trim() }.orEmpty()
+            if (value.isNotBlank()) return value
+        }
+        return ""
     }
 
     private fun extractValue(obj: JSONObject, key: String): String {

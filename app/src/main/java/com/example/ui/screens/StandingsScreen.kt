@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.ui.components.trimToCapHeight
 import com.example.data.model.ConstructorStandingItem
 import com.example.data.model.DriverStandingItem
 import com.example.ui.theme.F1CardBorder
@@ -114,13 +115,7 @@ fun StandingsScreen(
                     ) {
                         Text(
                             text = season,
-                            style = androidx.compose.ui.text.TextStyle(
-                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
-                                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                                    alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-                                    trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both
-                                )
-                            ),
+                            modifier = Modifier.trimToCapHeight(11.sp),
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,

@@ -51,6 +51,7 @@ import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
 import com.example.ui.components.FlagIndicator
 import com.example.ui.components.TyreBadge
+import com.example.ui.components.hasTyreData
 import com.example.ui.components.WeatherChip
 import com.example.ui.theme.F1CardBorder
 import com.example.ui.theme.F1CardSurface
@@ -390,14 +391,17 @@ private fun DriverTimingRow(
             }
         }
 
-        // Tyre Stint Badge (Only compound badge in main view; stint details & tyre age in details popup)
+        // Tyre Stint Badge (Only compound badge in main view; stint details & tyre age in details popup).
+        // The slot keeps its width when there is no tyre data so the columns stay aligned.
         Box(
             modifier = Modifier.width(32.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            TyreBadge(
-                compound = driver.currentCompound
-            )
+            if (hasTyreData(driver.currentCompound)) {
+                TyreBadge(
+                    compound = driver.currentCompound
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(10.dp))

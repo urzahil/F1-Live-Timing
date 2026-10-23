@@ -26,6 +26,12 @@ import com.example.ui.theme.TyreSoft
 import com.example.ui.theme.TyreUnknown
 import com.example.ui.theme.TyreWet
 
+/** False when the feed has no compound for the driver yet (e.g. a session loaded but not started). */
+fun hasTyreData(compound: String): Boolean {
+    val upper = compound.trim().uppercase()
+    return upper.isNotEmpty() && upper != "--" && upper != "UNKNOWN"
+}
+
 @Composable
 fun TyreBadge(
     compound: String,

@@ -1,0 +1,93 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 99c24c3..7ee6ae4 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -36,6 +36,17 @@ class F1LiveClient {
+         this.lastMessageAt = null;
+ 
+         // Global State Cache preserving exact SignalR Core PascalCase structure and fields
++        this.resetState();
++
++        this.watchdogTimer = null;
++    }
++
++    /**
++     * @description Discards all cached channel state. Called before applying a full snapshot and when
++     * the feed switches to a new session, so data from a previous session or connection never lingers.
++     * @returns {void}
++     */
++    resetState() {
+         this.timingData = { Lines: {} };
+         this.driverList = {};
+         this.timingAppData = { Lines: {} };
+@@ -44,8 +55,6 @@ class F1LiveClient {
+         this.lapCount = {};
+         this.raceControl = [];
+         this.teamRadio = [];
+-
+-        this.watchdogTimer = null;
+     }
+ 
+     /**
+@@ -226,6 +235,9 @@ class F1LiveClient {
+     }
+ 
+     handleSnapshot(result) {
++        // The subscribe result is the full current state; merging it over the old cache would keep
++        // stale lines and duplicate the appended RaceControlMessages/TeamRadio lists.
++        this.resetState();
+         if (result.DriverList) this.routeData('DriverList', result.DriverList);
+         if (result.TimingAppData) this.routeData('TimingAppData', result.TimingAppData);
+         if (result.TimingData) this.routeData('TimingData', result.TimingData);
+@@ -261,10 +273,24 @@ class F1LiveClient {
+                 deepMerge(this.timingData, data);
+                 this.broadcast({ type: channel, data: this.timingData });
+                 break;
+-            case 'SessionInfo':
++            case 'SessionInfo': {
++                const previousKey = this.session.Key;
++                const sessionChanged = previousKey !== undefined && data.Key !== undefined && data.Key !== previousKey;
++                if (sessionChanged) {
++                    // Deltas for the new session would be merged over the previous session's timing and
++                    // tyre state, so drop it and reconnect to receive a clean snapshot of the new session.
++                    console.log(`[F1Client] Session changed (${previousKey} -> ${data.Key}). Resetting state and resubscribing...`);
++                    this.resetState();
++                }
+                 deepMerge(this.session, data);
+                 this.broadcast({ type: 'SessionInfo', data: this.session });
++                if (sessionChanged && this.ws) {
++                    try {
++                        this.ws.terminate();
++                    } catch (e) {}
++                }
+                 break;
++            }
+             case 'WeatherData':
+                 deepMerge(this.weather, data);
+                 this.broadcast({ type: 'WeatherData', data: this.weather });
+diff --git a/src/utils/merge.js b/src/utils/merge.js
+index c68f4d4..3609177 100644
+--- a/src/utils/merge.js
++++ b/src/utils/merge.js
+@@ -32,7 +32,20 @@ function deepMerge(target, source) {
+         const sourceVal = source[key];
+ 
+         if (sourceVal !== undefined) {
+-            if (isPlainObject(sourceVal)) {
++            if (isPlainObject(sourceVal) && Array.isArray(target[key])) {
++                // SignalR sends updates to existing arrays (e.g. Stints, Sectors) as index-keyed objects
++                // such as {"1": {...}}; apply them per index instead of discarding the array.
++                const merged = target[key].slice();
++                for (const index of Object.keys(sourceVal)) {
++                    const position = Number(index);
++                    if (!Number.isInteger(position) || position < 0) continue;
++                    const item = sourceVal[index];
++                    merged[position] = isPlainObject(item)
++                        ? deepMerge(deepMerge({}, isPlainObject(merged[position]) ? merged[position] : {}), item)
++                        : item;
++                }
++                target[key] = merged;
++            } else if (isPlainObject(sourceVal)) {
+                 if (!isPlainObject(target[key])) {
+                     target[key] = {};
+                 }

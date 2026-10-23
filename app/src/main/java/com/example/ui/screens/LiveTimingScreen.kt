@@ -302,14 +302,17 @@ private fun TableHeaderRow() {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1.1f)
         )
+        // Spans the rows' 32dp tyre slot plus their 10dp spacer, so the label has room at large
+        // font scales while the columns below stay aligned.
         Text(
             text = "TYRE",
             color = F1TextMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(32.dp)
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(42.dp)
         )
-        Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = "BEST LAP",
             color = F1TextMuted,

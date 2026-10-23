@@ -92,9 +92,11 @@ private fun RaceControlMessageRow(message: ParsedRaceControlMessage) {
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
-            modifier = Modifier
-                .width(58.dp)
-                .padding(top = 1.dp)
+            // Sized by its content so larger system font scales never wrap the time; every time
+            // has the same monospace length, so message text still lines up across rows.
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(top = 1.dp, end = 8.dp)
         )
         // Fixed-width slot keeps message text aligned whether or not a flag dot is shown.
         Box(

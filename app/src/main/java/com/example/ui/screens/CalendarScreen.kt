@@ -271,10 +271,11 @@ internal fun GrandPrixRaceCard(
                     Box(
                         modifier = Modifier
                             .background(F1Red.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 4.5.dp)
                     ) {
                         Text(
                             text = "R${race.round.orEmpty()}",
+                            modifier = Modifier.trimToInkHeight("R${race.round.orEmpty()}", 11.sp),
                             color = F1Red,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -297,10 +298,11 @@ internal fun GrandPrixRaceCard(
                             modifier = Modifier
                                 .background(Color(0xFF9B51E0).copy(alpha = 0.25f), RoundedCornerShape(4.dp))
                                 .border(1.dp, Color(0xFFC785F8).copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .padding(horizontal = 6.dp, vertical = 4.5.dp)
                         ) {
                             Text(
                                 text = "SPRINT",
+                                modifier = Modifier.trimToInkHeight("SPRINT", 10.sp, FontFamily.Default),
                                 color = Color(0xFFC785F8),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold

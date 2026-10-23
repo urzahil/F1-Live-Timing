@@ -312,10 +312,11 @@ private fun DriverStandingRow(
                             modifier = Modifier
                                 .background(F1PitWallSurface, RoundedCornerShape(3.dp))
                                 .border(1.dp, F1CardBorder, RoundedCornerShape(3.dp))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                .padding(horizontal = 4.dp, vertical = 3.5.dp)
                         ) {
                             Text(
                                 text = countryCode,
+                                modifier = Modifier.trimToInkHeight(countryCode, 10.sp),
                                 color = F1TextPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,

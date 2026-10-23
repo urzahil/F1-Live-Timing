@@ -80,10 +80,11 @@ fun TyreBadge(
             Box(
                 modifier = Modifier
                     .background(Color(0xFF27AE60).copy(alpha = 0.2f), RoundedCornerShape(2.dp))
-                    .padding(horizontal = 3.dp, vertical = 1.dp)
+                    .padding(horizontal = 3.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = "N",
+                    modifier = Modifier.trimToInkHeight("N", 9.sp, FontFamily.Default),
                     color = Color(0xFF2ECC71),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold

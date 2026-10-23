@@ -51,6 +51,7 @@ import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
 import com.example.ui.components.FlagIndicator
 import com.example.ui.components.TyreBadge
+import com.example.ui.components.hasTyreData
 import com.example.ui.components.WeatherChip
 import com.example.ui.theme.F1CardBorder
 import com.example.ui.theme.F1CardSurface
@@ -115,10 +116,13 @@ fun LiveTimingScreen(
                 onNavigateToCalendar = onNavigateToCalendar
             )
         } else {
-            // Above the standings: Current lap / total laps of the race like "LAP 17 / 44"
+            // Above the standings: Current lap / total laps of the race like "LAP 17 / 44".
+            // Practice and (sprint) qualifying are timed sessions, so a lap counter is meaningless there.
             val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
             val totalLaps = session.totalLaps
-            val lapText = if (totalLaps > 0 && currentLap > 0) {
+            val lapText = if (isTimedSession(session)) {
+                ""
+            } else if (totalLaps > 0 && currentLap > 0) {
                 "LAP $currentLap / $totalLaps"
             } else if (totalLaps > 0) {
                 "LAP 0 / $totalLaps"
@@ -178,6 +182,15 @@ fun LiveTimingScreen(
             }
         }
     }
+}
+
+/** Practice, Qualifying and Sprint Qualifying/Shootout run on time rather than a lap count. */
+private fun isTimedSession(session: ParsedSession): Boolean {
+    val type = session.sessionType.trim()
+    if (type.equals("Practice", ignoreCase = true) || type.equals("Qualifying", ignoreCase = true)) return true
+    if (type.isNotEmpty()) return false
+    val name = session.sessionName.lowercase()
+    return "practice" in name || "qualifying" in name || "shootout" in name
 }
 
 @Composable
@@ -390,14 +403,17 @@ private fun DriverTimingRow(
             }
         }
 
-        // Tyre Stint Badge (Only compound badge in main view; stint details & tyre age in details popup)
+        // Tyre Stint Badge (Only compound badge in main view; stint details & tyre age in details popup).
+        // The slot keeps its width when there is no tyre data so the columns stay aligned.
         Box(
             modifier = Modifier.width(32.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            TyreBadge(
-                compound = driver.currentCompound
-            )
+            if (hasTyreData(driver.currentCompound)) {
+                TyreBadge(
+                    compound = driver.currentCompound
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(10.dp))

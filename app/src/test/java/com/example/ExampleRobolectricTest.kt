@@ -189,4 +189,62 @@ class ExampleRobolectricTest {
     assertEquals("--", ver.sector3)
     assertEquals(listOf("VER"), timings.filter { it.isOverallBestLap }.map { it.driverCode })
   }
+
+  @Test
+  fun `practice and qualifying gaps fall back to time diff fields`() {
+    val repo = F1LiveRepository()
+    val raw = """
+      [
+        {"RacingNumber":"4","Tla":"NOR","Position":"1","TimeDiffToFastest":"","TimeDiffToPositionAhead":""},
+        {"RacingNumber":"81","Tla":"PIA","Position":"2","TimeDiffToFastest":"+0.215","TimeDiffToPositionAhead":"+0.215"},
+        {"RacingNumber":"16","Tla":"LEC","Position":"3",
+         "Stats":[{"TimeDiffToFastest":"+0.400","TimeDiffToPositionAhead":"+0.100"},
+                  {"TimeDiffToFastest":"+0.312","TimeDiffToPositionAhead":"+0.097"},
+                  {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""}]},
+        {"RacingNumber":"44","Tla":"HAM","Position":"4","GapToLeader":"+5.1",
+         "IntervalToPositionAhead":{"Value":"+1.2"},"TimeDiffToFastest":"+9.9"}
+      ]
+    """.trimIndent()
+
+    val byCode = repo.parseStandingsJson(raw).associateBy { it.driverCode }
+
+    assertEquals("LEADER", byCode.getValue("NOR").gapToLeader)
+    assertEquals("+0.215", byCode.getValue("PIA").gapToLeader)
+    assertEquals("+0.215", byCode.getValue("PIA").intervalToAhead)
+    // Q3 not yet set: use the latest part that has a value (Q2).
+    assertEquals("+0.312", byCode.getValue("LEC").gapToLeader)
+    assertEquals("+0.097", byCode.getValue("LEC").intervalToAhead)
+    // Race fields still take precedence.
+    assertEquals("+5.1", byCode.getValue("HAM").gapToLeader)
+    assertEquals("+1.2", byCode.getValue("HAM").intervalToAhead)
+  }
+
+  @Test
+  fun `stints and sectors delivered as index-keyed objects are parsed`() {
+    val repo = F1LiveRepository()
+    // Shape served by the backend during a live session: lists merged from deltas as {"0": {...}}.
+    val raw = """
+      [
+        {"RacingNumber":"81","Tla":"PIA","Position":"2",
+         "Stints":{"0":{"Compound":"MEDIUM","New":"true","TotalLaps":4}},
+         "Sectors":{"0":{"Value":"25.101"},"2":{"Value":"40.250"}}},
+        {"RacingNumber":"23","Tla":"ALB","Position":"19",
+         "Stints":{"0":{"TotalLaps":1},"1":{"Compound":"HARD","New":"false","TotalLaps":1}}}
+      ]
+    """.trimIndent()
+
+    val byCode = repo.parseStandingsJson(raw).associateBy { it.driverCode }
+
+    val pia = byCode.getValue("PIA")
+    assertEquals("MEDIUM", pia.currentCompound)
+    assertEquals(4, pia.currentCompoundAge)
+    assertEquals(true, pia.isCurrentCompoundNew)
+    assertEquals("25.101", pia.sector1)
+    assertEquals("--", pia.sector2)
+    assertEquals("40.250", pia.sector3)
+
+    val alb = byCode.getValue("ALB")
+    assertEquals(listOf("UNKNOWN", "HARD"), alb.stintsHistory.map { it.compound })
+    assertEquals("HARD", alb.currentCompound)
+  }
 }

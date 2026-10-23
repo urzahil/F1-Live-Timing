@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import com.example.data.repository.F1LiveRepository
 import com.example.data.repository.ParsedDriverTiming
+import com.example.data.repository.ParsedRaceControlMessage
 import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
 
@@ -9,6 +10,7 @@ internal data class LiveTimingSnapshot(
     val session: ParsedSession = ParsedSession(),
     val weather: ParsedWeather = ParsedWeather(),
     val timings: List<ParsedDriverTiming> = emptyList(),
+    val raceControl: List<ParsedRaceControlMessage> = emptyList(),
     val status: String = "Waiting for the first refresh",
     val error: String? = null
 )
@@ -56,13 +58,15 @@ internal class LiveTimingCoordinator(
             if (incompleteEmptyReply) {
                 stale = true
             } else {
-                if (sessionKey(parsed) != sessionKey(previousSession) && snapshot.timings.isNotEmpty()) {
+                val sessionChanged = sessionKey(parsed) != sessionKey(previousSession)
+                if (sessionChanged && snapshot.timings.isNotEmpty()) {
                     // A session disappearing or changing must not leave the prior leaderboard
                     // attached to the next session, even when an empty session response arrives.
                     snapshot = snapshot.copy(timings = emptyList())
                     lastTimingsFetchAt = 0L
                     finalTimingFetchSessionKey = null
                 }
+                if (sessionChanged) snapshot = snapshot.copy(raceControl = emptyList())
                 snapshot = snapshot.copy(session = parsed)
                 lastSessionSuccessAt = now
             }
@@ -107,6 +111,12 @@ internal class LiveTimingCoordinator(
                     lastTimingsFetchAt = 0L
                 }
             }.onFailure { stale = true }
+
+            // Supplementary to the leaderboard: a failed fetch keeps the last list without marking
+            // the whole snapshot stale.
+            repository.fetchRaceControl(currentUrl).onSuccess { messages ->
+                snapshot = snapshot.copy(raceControl = messages)
+            }
         }
 
         val hasAnyData = hasIdentity || snapshot.timings.isNotEmpty() || snapshot.weather != ParsedWeather()

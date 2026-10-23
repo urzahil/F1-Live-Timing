@@ -6,20 +6,29 @@ import android.graphics.Typeface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import kotlin.math.ceil
 
 /**
- * Shrinks a bold-monospace Text's layout box to the real ink bounds of [text] as measured on
+ * Shrinks a Text's layout box to the real ink bounds of [text] as measured on
  * this device's font, so surrounding padding centers the visible glyphs regardless of the
  * vendor font's ascent/descent metrics.
  */
-fun Modifier.trimToInkHeight(text: String, fontSize: TextUnit): Modifier =
+fun Modifier.trimToInkHeight(
+    text: String,
+    fontSize: TextUnit,
+    fontFamily: FontFamily = FontFamily.Monospace,
+    bold: Boolean = true
+): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val baseline = placeable[FirstBaseline]
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            typeface = Typeface.create(
+                if (fontFamily == FontFamily.Monospace) Typeface.MONOSPACE else Typeface.DEFAULT,
+                if (bold) Typeface.BOLD else Typeface.NORMAL
+            )
             textSize = fontSize.toPx()
         }
         val bounds = Rect()

@@ -345,7 +345,7 @@ class F1LiveRepository {
                     val driverKey = keys.next()
                     val driverVal = root.opt(driverKey)
                     val stintsArray = when (driverVal) {
-                        is JSONObject -> driverVal.optJSONArray("Stints")
+                        is JSONObject -> optIndexedArray(driverVal, "Stints")
                         is JSONArray -> driverVal
                         else -> null
                     }
@@ -361,7 +361,7 @@ class F1LiveRepository {
                 for (i in 0 until array.length()) {
                     val item = array.optJSONObject(i) ?: continue
                     val driverNum = item.optString("RacingNumber", item.optString("DriverNumber", ""))
-                    val stintsArray = item.optJSONArray("Stints")
+                    val stintsArray = optIndexedArray(item, "Stints")
                     if (stintsArray != null) {
                         val parsed = parseStintsArray(stintsArray)
                         if (driverNum.isNotBlank() && parsed.isNotEmpty()) {
@@ -495,7 +495,7 @@ class F1LiveRepository {
                 val bestLap = extractValue(d, "BestLapTime").trim().ifBlank { "--" }
                 val lastLap = extractValue(d, "LastLapTime").trim().ifBlank { "--" }
 
-                val sectorsArray = d.optJSONArray("Sectors")
+                val sectorsArray = optIndexedArray(d, "Sectors")
                 val s1 = sectorValue(sectorsArray, 0)
                 val s2 = sectorValue(sectorsArray, 1)
                 val s3 = sectorValue(sectorsArray, 2)
@@ -525,7 +525,7 @@ class F1LiveRepository {
                 }
 
                 // Extract Stints directly from the driver object (from /api/leaderboard), or fallback to tyresMap
-                val driverStintsArray = d.optJSONArray("Stints")
+                val driverStintsArray = optIndexedArray(d, "Stints")
                 val stints = if (driverStintsArray != null && driverStintsArray.length() > 0) {
                     parseStintsArray(driverStintsArray)
                 } else {
@@ -603,9 +603,26 @@ class F1LiveRepository {
         }
     }
 
+    /**
+     * Reads a list field that SignalR may deliver either as an array or as an index-keyed object
+     * ({"0": {...}, "1": {...}}), which is how backends that merge raw deltas expose Stints/Sectors.
+     * Object entries are placed at their index so positional fields (sector 1-3) stay aligned.
+     */
+    private fun optIndexedArray(obj: JSONObject, key: String): JSONArray? {
+        obj.optJSONArray(key)?.let { return it }
+        val indexed = obj.optJSONObject(key) ?: return null
+        val entries = indexed.keys().asSequence()
+            .mapNotNull { k -> k.toIntOrNull()?.takeIf { it >= 0 }?.let { it to indexed.opt(k) } }
+            .toList()
+        if (entries.isEmpty()) return null
+        val array = JSONArray()
+        for ((index, value) in entries) array.put(index, value)
+        return array
+    }
+
     /** Value of [key] from the most recent qualifying part (last Stats entry) that has one. */
     private fun latestQualifyingStat(obj: JSONObject, key: String): String {
-        val stats = obj.optJSONArray("Stats") ?: return ""
+        val stats = optIndexedArray(obj, "Stats") ?: return ""
         for (i in stats.length() - 1 downTo 0) {
             val value = stats.optJSONObject(i)?.let { extractValue(it, key).trim() }.orEmpty()
             if (value.isNotBlank()) return value

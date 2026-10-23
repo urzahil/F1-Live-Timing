@@ -11,10 +11,12 @@ ARG UPSTREAM_COMMIT=76512d8c0124acd21e499ef924363e1dbdd825b4
 RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
  && git checkout --quiet "$UPSTREAM_COMMIT"
 
-# Upstream merges every SignalR delta into one long-lived state tree and never resets it, so a newly
-# loaded session keeps serving the previous session's tyres and gaps. The patch resets state on a
-# session change and on each snapshot, and merges index-keyed array deltas (Stints, Sectors) properly.
-# CRs are stripped in case a Windows checkout converted the patch; git apply fails the build if it no longer applies.
+# Local patches, applied in filename order:
+# 01 - Upstream merges every SignalR delta into one long-lived state tree and never resets it, so a newly
+#      loaded session keeps serving the previous session's tyres and gaps. Resets state on a session
+#      change and on each snapshot, and merges index-keyed array deltas (Stints, Sectors) properly.
+# 02 - Subscribes to ExtrapolatedClock and returns it from /api/session for the session timer.
+# CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \
  && git apply /tmp/patches/*.patch \

@@ -1,0 +1,75 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 7ee6ae4..1fbb07e 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -25,7 +25,8 @@ const SUBSCRIBE_CHANNELS = [
+     'WeatherData',
+     'RaceControlMessages',
+     'LapCount',
+-    'TeamRadio'
++    'TeamRadio',
++    'ExtrapolatedClock'
+ ];
+ 
+ class F1LiveClient {
+@@ -55,6 +56,7 @@ class F1LiveClient {
+         this.lapCount = {};
+         this.raceControl = [];
+         this.teamRadio = [];
++        this.extrapolatedClock = {};
+     }
+ 
+     /**
+@@ -247,6 +249,7 @@ class F1LiveClient {
+         if (result.RaceControlMessages) this.routeData('RaceControlMessages', result.RaceControlMessages);
+         if (result.LapCount) this.routeData('LapCount', result.LapCount);
+         if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
++        if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+     }
+ 
+     /**
+@@ -313,6 +316,12 @@ class F1LiveClient {
+                     this.broadcast({ type: 'TeamRadio', data: this.teamRadio });
+                 }
+                 break;
++            case 'ExtrapolatedClock':
++                // { Utc, Remaining: "HH:MM:SS", Extrapolating } — only sent when the clock starts,
++                // stops or is corrected; clients count down from Remaining at Utc while Extrapolating.
++                deepMerge(this.extrapolatedClock, data);
++                this.broadcast({ type: 'ExtrapolatedClock', data: this.extrapolatedClock });
++                break;
+         }
+     }
+ 
+@@ -349,6 +358,10 @@ class F1LiveClient {
+         return this.teamRadio;
+     }
+ 
++    getExtrapolatedClock() {
++        return this.extrapolatedClock;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index d44164b..41aa379 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -17,12 +17,14 @@ function createSessionRouter(f1Client) {
+ 
+     /**
+      * GET /api/session
+-     * Retrieves current meeting and session metadata (SessionInfo channel).
++     * Retrieves current meeting and session metadata (SessionInfo channel) and the session clock
++     * (ExtrapolatedClock channel).
+      */
+     router.get('/session', (req, res) => {
+         try {
+             const sessionInfo = f1Client.getSessionInfo() || {};
+-            res.status(200).json({ Session: sessionInfo });
++            const extrapolatedClock = f1Client.getExtrapolatedClock() || {};
++            res.status(200).json({ Session: sessionInfo, ExtrapolatedClock: extrapolatedClock });
+         } catch (error) {
+             console.error('[API Error] Failed to retrieve session info:', error);
+             res.status(500).json({ error: 'Internal server error while querying SessionInfo.' });

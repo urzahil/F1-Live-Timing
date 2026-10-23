@@ -1,19 +1,30 @@
 package com.example.ui.components
 
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.TextUnit
-import kotlin.math.roundToInt
+import kotlin.math.ceil
 
 /**
- * Shrinks a Text's layout box to its cap height (digits / capitals), so the visible glyphs
- * are centered by surrounding padding instead of the font's ascent/descent line box.
+ * Shrinks a bold-monospace Text's layout box to the real ink bounds of [text] as measured on
+ * this device's font, so surrounding padding centers the visible glyphs regardless of the
+ * vendor font's ascent/descent metrics.
  */
-fun Modifier.trimToCapHeight(fontSize: TextUnit, capHeightRatio: Float = 0.72f): Modifier =
+fun Modifier.trimToInkHeight(text: String, fontSize: TextUnit): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val baseline = placeable[FirstBaseline]
-        val capHeight = (fontSize.toPx() * capHeightRatio).roundToInt()
-        layout(placeable.width, capHeight) { placeable.place(0, capHeight - baseline) }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            textSize = fontSize.toPx()
+        }
+        val bounds = Rect()
+        paint.getTextBounds(text, 0, text.length, bounds)
+        // bounds.top is negative (above baseline), bounds.bottom is relative to baseline.
+        val inkHeight = ceil(bounds.height().toFloat()).toInt().coerceAtLeast(1)
+        layout(placeable.width, inkHeight) { placeable.place(0, -(baseline + bounds.top)) }
     }

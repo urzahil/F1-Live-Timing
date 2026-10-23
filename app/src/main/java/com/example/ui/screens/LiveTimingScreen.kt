@@ -116,10 +116,13 @@ fun LiveTimingScreen(
                 onNavigateToCalendar = onNavigateToCalendar
             )
         } else {
-            // Above the standings: Current lap / total laps of the race like "LAP 17 / 44"
+            // Above the standings: Current lap / total laps of the race like "LAP 17 / 44".
+            // Practice and (sprint) qualifying are timed sessions, so a lap counter is meaningless there.
             val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
             val totalLaps = session.totalLaps
-            val lapText = if (totalLaps > 0 && currentLap > 0) {
+            val lapText = if (isTimedSession(session)) {
+                ""
+            } else if (totalLaps > 0 && currentLap > 0) {
                 "LAP $currentLap / $totalLaps"
             } else if (totalLaps > 0) {
                 "LAP 0 / $totalLaps"
@@ -179,6 +182,15 @@ fun LiveTimingScreen(
             }
         }
     }
+}
+
+/** Practice, Qualifying and Sprint Qualifying/Shootout run on time rather than a lap count. */
+private fun isTimedSession(session: ParsedSession): Boolean {
+    val type = session.sessionType.trim()
+    if (type.equals("Practice", ignoreCase = true) || type.equals("Qualifying", ignoreCase = true)) return true
+    if (type.isNotEmpty()) return false
+    val name = session.sessionName.lowercase()
+    return "practice" in name || "qualifying" in name || "shootout" in name
 }
 
 @Composable

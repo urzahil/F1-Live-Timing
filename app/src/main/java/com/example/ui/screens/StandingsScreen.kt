@@ -110,7 +110,7 @@ fun StandingsScreen(
                         modifier = Modifier
                             .width(56.dp)
                             .background(F1Red, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                            .padding(horizontal = 8.dp, vertical = 5.5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

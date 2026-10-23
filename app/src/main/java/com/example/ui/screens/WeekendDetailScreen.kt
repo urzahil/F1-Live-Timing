@@ -101,7 +101,7 @@ internal fun GrandPrixWeekendDetailScreen(
                     Box(
                         modifier = Modifier
                             .background(F1Red, RoundedCornerShape(3.dp))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                            .padding(horizontal = 5.dp, vertical = 3.5.dp)
                     ) {
                         Text(
                             text = "ROUND ${race.round.orEmpty()}",

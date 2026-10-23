@@ -17,6 +17,7 @@ import com.example.data.repository.F1ChampionshipRepository
 import com.example.data.repository.CalendarResultsCache
 import com.example.data.repository.ExpiringListCache
 import com.example.data.repository.ParsedDriverTiming
+import com.example.data.repository.ParsedRaceControlMessage
 import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
 import com.example.data.repository.ServerSettingsRepository
@@ -82,6 +83,9 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _liveTimings = MutableStateFlow<List<ParsedDriverTiming>>(emptyList())
     val liveTimings: StateFlow<List<ParsedDriverTiming>> = _liveTimings.asStateFlow()
+
+    private val _raceControl = MutableStateFlow<List<ParsedRaceControlMessage>>(emptyList())
+    val raceControl: StateFlow<List<ParsedRaceControlMessage>> = _raceControl.asStateFlow()
 
     private val _liveError = MutableStateFlow<String?>(null)
     val liveError: StateFlow<String?> = _liveError.asStateFlow()
@@ -304,6 +308,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _session.value = snapshot.session
         _weather.value = snapshot.weather
         _liveTimings.value = snapshot.timings
+        _raceControl.value = snapshot.raceControl
         _liveDataStatus.value = snapshot.status
         _liveError.value = snapshot.error
     }

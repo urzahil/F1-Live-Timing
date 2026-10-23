@@ -47,9 +47,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.repository.ParsedDriverTiming
+import com.example.data.repository.ParsedRaceControlMessage
 import com.example.data.repository.ParsedSession
 import com.example.data.repository.ParsedWeather
 import com.example.ui.components.FlagIndicator
+import com.example.ui.components.RaceControlCard
 import com.example.ui.components.TyreBadge
 import com.example.ui.components.hasTyreData
 import com.example.ui.components.WeatherChip
@@ -66,6 +68,7 @@ fun LiveTimingScreen(
     session: ParsedSession,
     weather: ParsedWeather,
     liveTimings: List<ParsedDriverTiming>,
+    raceControl: List<ParsedRaceControlMessage> = emptyList(),
     isPolling: Boolean,
     backendUrl: String,
     liveError: String?,
@@ -175,6 +178,14 @@ fun LiveTimingScreen(
                         isFastestLap = driver.isOverallBestLap,
                         onClick = { onSelectDriver(driver) }
                     )
+                }
+                if (raceControl.isNotEmpty()) {
+                    item(key = "race_control") {
+                        RaceControlCard(
+                            messages = raceControl,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
                 }
                 item {
                     Spacer(modifier = Modifier.height(16.dp))

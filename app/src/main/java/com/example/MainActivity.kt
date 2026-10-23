@@ -96,6 +96,7 @@ fun MainContent(viewModel: F1ViewModel) {
     val session by viewModel.session.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
     val liveTimings by viewModel.liveTimings.collectAsStateWithLifecycle()
+    val raceControl by viewModel.raceControl.collectAsStateWithLifecycle()
     val isPolling by viewModel.isPollingActive.collectAsStateWithLifecycle()
     val backendUrl by viewModel.backendUrl.collectAsStateWithLifecycle()
     val liveError by viewModel.liveError.collectAsStateWithLifecycle()
@@ -276,6 +277,7 @@ fun MainContent(viewModel: F1ViewModel) {
                         session = session,
                         weather = weather,
                         liveTimings = liveTimings,
+                        raceControl = raceControl,
                         isPolling = isPolling,
                         backendUrl = backendUrl,
                         liveError = liveError,

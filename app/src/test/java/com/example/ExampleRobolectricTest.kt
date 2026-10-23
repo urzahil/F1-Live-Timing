@@ -247,4 +247,21 @@ class ExampleRobolectricTest {
     assertEquals(listOf("UNKNOWN", "HARD"), alb.stintsHistory.map { it.compound })
     assertEquals("HARD", alb.currentCompound)
   }
+
+  @Test
+  fun `race control keeps the latest five messages newest first`() {
+    val repo = F1LiveRepository()
+    val messages = (1..7).joinToString(",") { i ->
+      """{"Utc":"2026-10-23T17:4$i:00","Category":"Flag","Flag":"YELLOW","Message":"MSG $i"}"""
+    }
+    val raw = """{"RaceControl":[$messages,{"Utc":"2026-10-23T17:50:00","Category":"Other","Message":""}]}"""
+
+    val parsed = repo.parseRaceControlJson(raw)
+
+    assertEquals(listOf("MSG 7", "MSG 6", "MSG 5", "MSG 4", "MSG 3"), parsed.map { it.message })
+    assertEquals("YELLOW", parsed.first().flag)
+    // Times are converted from UTC to the device zone; only the shape is stable across machines.
+    assert(Regex("""\d{2}:\d{2}:\d{2}""").matches(parsed.first().time))
+    assertEquals(emptyList<Any>(), repo.parseRaceControlJson("""{"RaceControl":[]}"""))
+  }
 }

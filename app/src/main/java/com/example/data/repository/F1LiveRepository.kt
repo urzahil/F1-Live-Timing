@@ -7,6 +7,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONObject
 
@@ -64,6 +67,13 @@ data class ParsedWeather(
     val windSpeed: String = "--",
     val windDirection: String = "--",
     val isRaining: Boolean = false
+)
+
+data class ParsedRaceControlMessage(
+    val time: String, // Local wall-clock time "HH:mm:ss", or "" when the feed gave none
+    val category: String,
+    val flag: String,
+    val message: String
 )
 
 class F1LiveRepository {
@@ -130,6 +140,59 @@ class F1LiveRepository {
         requestResult("weather") {
             val raw = NetworkClient.createLiveService(baseUrl).getWeatherRaw().string()
             parseWeather(raw)
+        }
+    }
+
+    suspend fun fetchRaceControl(baseUrl: String): Result<List<ParsedRaceControlMessage>> = withContext(Dispatchers.IO) {
+        requestResult("race-control") {
+            parseRaceControlJson(NetworkClient.createLiveService(baseUrl).getRaceControlRaw().string())
+        }
+    }
+
+    /**
+     * Returns the latest [limit] race control messages, newest first. Accepts the backend's
+     * {"RaceControl": [...]} wrapper, the raw {"Messages": ...} channel shape, or a bare array.
+     */
+    fun parseRaceControlJson(raw: String, limit: Int = 5): List<ParsedRaceControlMessage> {
+        if (raw.isBlank() || raw == "{}" || raw == "[]") return emptyList()
+        return try {
+            val messages = if (raw.trimStart().startsWith("[")) {
+                JSONArray(raw)
+            } else {
+                val root = JSONObject(raw)
+                optIndexedArray(root, "RaceControl") ?: optIndexedArray(root, "Messages") ?: JSONArray()
+            }
+            (0 until messages.length())
+                .mapNotNull { messages.optJSONObject(it) }
+                .mapNotNull { m ->
+                    val text = m.optString("Message", "").trim()
+                    if (text.isBlank()) null else ParsedRaceControlMessage(
+                        time = formatRaceControlTime(m.optString("Utc", "")),
+                        category = m.optString("Category", "").trim(),
+                        flag = m.optString("Flag", "").trim().uppercase(),
+                        message = text
+                    )
+                }
+                .takeLast(limit)
+                .reversed()
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to parse race control data (${error.javaClass.simpleName})")
+            emptyList()
+        }
+    }
+
+    /** Converts the feed's UTC timestamp ("2026-10-23T17:51:31", optional fraction/zone) to local "HH:mm:ss". */
+    private fun formatRaceControlTime(utc: String): String {
+        val trimmed = utc.trim().take(19)
+        if (trimmed.length < 19) return ""
+        return try {
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val date = parser.parse(trimmed) ?: return ""
+            SimpleDateFormat("HH:mm:ss", Locale.US).format(date)
+        } catch (error: Exception) {
+            ""
         }
     }
 

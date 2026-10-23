@@ -264,4 +264,29 @@ class ExampleRobolectricTest {
     assert(Regex("""\d{2}:\d{2}:\d{2}""").matches(parsed.first().time))
     assertEquals(emptyList<Any>(), repo.parseRaceControlJson("""{"RaceControl":[]}"""))
   }
+
+  @Test
+  fun `session clock is parsed from the session response and counts down only while running`() {
+    val repo = F1LiveRepository()
+    val raw = """
+      {"Session":{"Meeting":{"Name":"United States Grand Prix"},"Type":"Practice","Name":"Practice 1",
+        "SessionStatus":"Started"},
+       "ExtrapolatedClock":{"Utc":"2026-10-23T17:30:00.250Z","Remaining":"01:00:00","Extrapolating":true}}
+    """.trimIndent()
+
+    val clock = repo.parseSessionJson(raw).clock!!
+    assertEquals(3_600_000L, clock.remainingMillis)
+    assertEquals(true, clock.extrapolating)
+    // 10.25 minutes after 17:30:00.250 UTC, 49:45 remain.
+    assertEquals(2_985_000L, clock.remainingAt(clock.utcMillis + 615_000L))
+    // Never negative once time is up.
+    assertEquals(0L, clock.remainingAt(clock.utcMillis + 4_000_000L))
+
+    val stopped = clock.copy(extrapolating = false)
+    assertEquals(3_600_000L, stopped.remainingAt(clock.utcMillis + 615_000L))
+
+    // Older backends without the clock, and malformed values, give no clock rather than a wrong one.
+    assertEquals(null, repo.parseSessionJson("""{"Session":{"Name":"Practice 1","SessionStatus":"Started"}}""").clock)
+    assertEquals(null, repo.parseSessionClock(org.json.JSONObject("""{"Utc":"2026-10-23T17:30:00Z","Remaining":"--"}""")))
+  }
 }

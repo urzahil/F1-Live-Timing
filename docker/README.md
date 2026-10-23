@@ -27,7 +27,7 @@ This guide explains how to host your own instance of the [`julesr0y/f1-livetimin
    docker compose logs -f f1-livetiming-api
    ```
 
-The image pins a specific upstream commit and applies the fixes in `patches/` (session-change state reset, index-keyed array deltas). After pulling changes to this folder, rebuild with `docker compose up -d --build`.
+The image pins a specific upstream commit and applies the patches in `patches/` in filename order (session-change state reset and index-keyed array deltas; the session clock from the `ExtrapolatedClock` channel, returned by `/api/session`). After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
 To stop the backend:
 ```bash

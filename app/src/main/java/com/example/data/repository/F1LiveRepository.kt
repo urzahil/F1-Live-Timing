@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -20,8 +21,22 @@ data class ParsedSession(
     val currentLap: Int = 0,
     val totalLaps: Int = 0,
     val status: String = "NO ACTIVE SESSION",
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val clock: ParsedSessionClock? = null
 )
+
+/**
+ * Session clock as last reported by the feed: [remainingMillis] were left at [utcMillis]. The feed
+ * only reports changes, so while [extrapolating] the clock keeps counting down from that point.
+ */
+data class ParsedSessionClock(
+    val remainingMillis: Long,
+    val utcMillis: Long,
+    val extrapolating: Boolean
+) {
+    fun remainingAt(nowMillis: Long): Long =
+        if (extrapolating) (remainingMillis - (nowMillis - utcMillis)).coerceAtLeast(0L) else remainingMillis
+}
 
 data class ParsedStint(
     val stintNumber: Int,
@@ -183,17 +198,38 @@ class F1LiveRepository {
 
     /** Converts the feed's UTC timestamp ("2026-10-23T17:51:31", optional fraction/zone) to local "HH:mm:ss". */
     private fun formatRaceControlTime(utc: String): String {
-        val trimmed = utc.trim().take(19)
-        if (trimmed.length < 19) return ""
+        val millis = parseFeedUtcMillis(utc) ?: return ""
+        return SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(millis))
+    }
+
+    /** Parses the feed's UTC timestamps ("2026-10-23T17:51:31", optional ".fff" and "Z") to epoch millis. */
+    private fun parseFeedUtcMillis(utc: String): Long? {
+        val trimmed = utc.trim()
+        if (trimmed.length < 19) return null
         return try {
             val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
-            val date = parser.parse(trimmed) ?: return ""
-            SimpleDateFormat("HH:mm:ss", Locale.US).format(date)
+            val seconds = parser.parse(trimmed.take(19))?.time ?: return null
+            val fraction = Regex("""^\.(\d{1,3})""").find(trimmed.substring(19))?.groupValues?.get(1)
+            seconds + (fraction?.padEnd(3, '0')?.toLong() ?: 0L)
         } catch (error: Exception) {
-            ""
+            null
         }
+    }
+
+    /** Parses ExtrapolatedClock ({Utc, Remaining: "HH:MM:SS", Extrapolating}); null when absent or malformed. */
+    fun parseSessionClock(clock: JSONObject?): ParsedSessionClock? {
+        if (clock == null) return null
+        val parts = clock.optString("Remaining", "").trim().split(":")
+        if (parts.size != 3) return null
+        val (h, m, s) = parts.map { it.toLongOrNull() ?: return null }
+        val utcMillis = parseFeedUtcMillis(clock.optString("Utc", "")) ?: return null
+        return ParsedSessionClock(
+            remainingMillis = (h * 3600 + m * 60 + s) * 1000,
+            utcMillis = utcMillis,
+            extrapolating = clock.optBoolean("Extrapolating", false)
+        )
     }
 
     suspend fun fetchLiveTimings(baseUrl: String): Result<List<ParsedDriverTiming>> = withContext(Dispatchers.IO) {
@@ -333,7 +369,8 @@ class F1LiveRepository {
                 currentLap = currentLap,
                 totalLaps = totalLaps,
                 status = displayStatus,
-                isLive = isLive
+                isLive = isLive,
+                clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock"))
             )
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")

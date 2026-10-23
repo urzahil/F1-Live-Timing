@@ -36,6 +36,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.repository.ParsedDriverTiming
 import com.example.data.repository.ParsedRaceControlMessage
 import com.example.data.repository.ParsedSession
+import com.example.data.repository.ParsedSessionClock
 import com.example.data.repository.ParsedWeather
 import com.example.ui.components.FlagIndicator
 import com.example.ui.components.RaceControlCard
@@ -62,6 +65,8 @@ import com.example.ui.theme.F1Red
 import com.example.ui.theme.F1TextMuted
 import com.example.ui.theme.F1TextPrimary
 import com.example.ui.theme.F1TextSecondary
+import kotlinx.coroutines.delay
+import java.util.Locale
 
 @Composable
 fun LiveTimingScreen(
@@ -119,43 +124,26 @@ fun LiveTimingScreen(
                 onNavigateToCalendar = onNavigateToCalendar
             )
         } else {
-            // Above the standings: Current lap / total laps of the race like "LAP 17 / 44".
-            // Practice and (sprint) qualifying are timed sessions, so a lap counter is meaningless there.
-            val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
-            val totalLaps = session.totalLaps
-            val lapText = if (isTimedSession(session)) {
-                ""
-            } else if (totalLaps > 0 && currentLap > 0) {
-                "LAP $currentLap / $totalLaps"
-            } else if (totalLaps > 0) {
-                "LAP 0 / $totalLaps"
-            } else if (currentLap > 0) {
-                "LAP $currentLap"
+            // Above the standings: practice and (sprint) qualifying are timed sessions, so they show
+            // the session clock; races show the current lap / total laps like "LAP 17 / 44".
+            if (isTimedSession(session)) {
+                session.clock?.let { SessionClockRow(clock = it) }
             } else {
-                ""
-            }
-
-            if (lapText.isNotBlank()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(if (session.isLive) Color(0xFF2ECC71) else Color(0xFFFFD700), CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
+                val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
+                val totalLaps = session.totalLaps
+                val lapText = if (totalLaps > 0 && currentLap > 0) {
+                    "LAP $currentLap / $totalLaps"
+                } else if (totalLaps > 0) {
+                    "LAP 0 / $totalLaps"
+                } else if (currentLap > 0) {
+                    "LAP $currentLap"
+                } else {
+                    ""
+                }
+                if (lapText.isNotBlank()) {
+                    SessionProgressRow(
                         text = lapText,
-                        color = F1TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.5.sp
+                        dotColor = if (session.isLive) Color(0xFF2ECC71) else Color(0xFFFFD700)
                     )
                 }
             }
@@ -192,6 +180,67 @@ fun LiveTimingScreen(
                 }
             }
         }
+    }
+}
+
+/** Centered status line above the table: a coloured dot followed by the lap count or session clock. */
+@Composable
+private fun SessionProgressRow(text: String, dotColor: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(dotColor, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            color = F1TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.5.sp,
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * Remaining session time. Counts down locally every second while the feed says the clock is
+ * running, and holds (yellow dot) when it is stopped, e.g. under a red flag or between Q parts.
+ */
+@Composable
+private fun SessionClockRow(clock: ParsedSessionClock) {
+    val now by produceState(initialValue = System.currentTimeMillis(), clock) {
+        while (clock.extrapolating) {
+            value = System.currentTimeMillis()
+            delay(1000L - value % 1000L)
+        }
+        value = System.currentTimeMillis()
+    }
+    SessionProgressRow(
+        text = "REMAINING ${formatSessionClock(clock.remainingAt(now))}",
+        dotColor = if (clock.extrapolating) Color(0xFF2ECC71) else Color(0xFFFFD700)
+    )
+}
+
+/** "1:00:00" for an hour or more, otherwise "59:59". */
+private fun formatSessionClock(remainingMillis: Long): String {
+    // Round up so the display reaches 00:00 exactly when the clock runs out.
+    val totalSeconds = (remainingMillis + 999L) / 1000L
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
 

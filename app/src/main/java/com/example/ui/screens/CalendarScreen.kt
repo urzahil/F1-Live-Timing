@@ -42,7 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.trimToCapHeight
+import com.example.ui.components.trimToInkHeight
 import com.example.data.model.PracticeTimingItem
 import com.example.data.model.QualifyingResultItem
 import com.example.data.model.RaceResultItem
@@ -177,7 +177,7 @@ internal fun GrandPrixCalendarList(
                 ) {
                     Text(
                         text = season,
-                        modifier = Modifier.trimToCapHeight(11.sp),
+                        modifier = Modifier.trimToInkHeight(season, 11.sp),
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,

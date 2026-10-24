@@ -1,0 +1,113 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 1fbb07e..87e6a3f 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -2,6 +2,7 @@ const WebSocket = require('ws');
+ const fs = require('fs');
+ const path = require('path');
+ const { deepMerge } = require('./utils/merge');
++const { Recorder } = require('./replay/recorder');
+ 
+ const F1_ORIGIN_URL = 'https://www.formula1.com';
+ const F1_HTTP_URL = 'https://livetiming.formula1.com/signalrcore';
+@@ -36,6 +37,10 @@ class F1LiveClient {
+         this.isConnected = false;
+         this.lastMessageAt = null;
+ 
++        // While replaying a recording, live frames are ignored (and not recorded) so they cannot mix into it.
++        this.replaying = false;
++        this.recorder = new Recorder(process.env.DATA_DIR || path.join(__dirname, '../data'));
++
+         // Global State Cache preserving exact SignalR Core PascalCase structure and fields
+         this.resetState();
+ 
+@@ -59,6 +64,29 @@ class F1LiveClient {
+         this.extrapolatedClock = {};
+     }
+ 
++    /**
++     * @description Switches the client to replay mode: live frames are ignored until exitReplay().
++     * @returns {void}
++     */
++    enterReplay() {
++        this.replaying = true;
++    }
++
++    /**
++     * @description Leaves replay mode and drops the replayed state. Dropping the socket makes the
++     * reconnect logic fetch a fresh snapshot of the live session.
++     * @returns {void}
++     */
++    exitReplay() {
++        this.replaying = false;
++        this.resetState();
++        if (this.ws) {
++            try {
++                this.ws.terminate();
++            } catch (e) {}
++        }
++    }
++
+     /**
+      * @description Initiates connection to F1 SignalR live timing endpoint.
+      * @returns {Promise<void>} Resolves when initial connection sequence completes.
+@@ -191,8 +219,11 @@ class F1LiveClient {
+                         return;
+                     }
+ 
++                    if (this.replaying) continue;
++
+                     if (frame.type === MSG_COMPLETION && frame.invocationId === SUBSCRIBE_INVOCATION_ID) {
+                         if (frame.result) {
++                            this.recorder.recordSnapshot(frame.result);
+                             this.handleSnapshot(frame.result);
+                         }
+                     }
+@@ -202,6 +233,7 @@ class F1LiveClient {
+                         if (args && args.length >= 2) {
+                             const channel = args[0];
+                             const payload = args[1];
++                            this.recorder.recordFeed(channel, payload);
+                             this.routeData(channel, payload);
+                         }
+                     }
+@@ -287,7 +319,7 @@ class F1LiveClient {
+                 }
+                 deepMerge(this.session, data);
+                 this.broadcast({ type: 'SessionInfo', data: this.session });
+-                if (sessionChanged && this.ws) {
++                if (sessionChanged && this.ws && !this.replaying) {
+                     try {
+                         this.ws.terminate();
+                     } catch (e) {}
+@@ -364,7 +396,7 @@ class F1LiveClient {
+ 
+     getConnectionStatus() {
+         return {
+-            isConnected: this.isConnected,
++            isConnected: this.isConnected || this.replaying,
+             lastMessageAt: this.lastMessageAt
+         };
+     }
+diff --git a/src/server.js b/src/server.js
+index cc99432..586ab2d 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -13,6 +13,7 @@ const { createStandingsRouter } = require('./routes/standings');
+ const { createTyresRouter } = require('./routes/tyres');
+ const { createDriversRouter } = require('./routes/drivers');
+ const { createSessionRouter } = require('./routes/session');
++const { createReplayRouter } = require('./replay/router');
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -43,6 +44,9 @@ app.use('/api/drivers', createDriversRouter(f1Client));
+ // Mount session, weather, lap-count, race-control, and radio routes under /api
+ app.use('/api', createSessionRouter(f1Client));
+ 
++// Recording replay control page and token-protected API
++app.use('/replay', createReplayRouter(f1Client));
++
+ /**
+  * GET /api/status
+  * Returns WebSocket connection state, uptime, and last received message timestamp.

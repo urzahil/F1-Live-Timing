@@ -11,8 +11,15 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=production
+      # Enables the /replay control page; set it in docker/.env. Left empty, replay control stays disabled.
+      - REPLAY_TOKEN=${REPLAY_TOKEN:-}
+    volumes:
+      - f1-recordings:/app/data
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  f1-recordings:

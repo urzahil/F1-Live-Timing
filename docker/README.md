@@ -29,6 +29,8 @@ This guide explains how to host your own instance of the [`julesr0y/f1-livetimin
 
 The image pins a specific upstream commit and applies the patches in `patches/` in filename order (session-change state reset and index-keyed array deltas; the session clock from the `ExtrapolatedClock` channel, returned by `/api/session`). After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
+Patch `03-record-replay.patch` and the `replay/` folder add session recording and replay, described [below](#recording-and-replay).
+
 To stop the backend:
 ```bash
 docker compose down
@@ -48,6 +50,31 @@ docker run -d --name f1-livetiming-api -p 3000:3000 --restart unless-stopped f1-
 # Check logs
 docker logs -f f1-livetiming-api
 ```
+
+---
+
+## Recording and Replay
+
+While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint. A newer session of the same type overwrites the older one. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
+
+A recording is saved when the next session starts, and also as a checkpoint once timing data has been quiet for 10 minutes, so a session is replayable shortly after it ends. Anything shorter than 100 messages or 60 seconds is discarded, and it never replaces a fuller recording of the same session.
+
+Replay feeds the stored messages through the same handlers as the live connection, at the original pace, so every `/api/*` endpoint answers as it does live. While a replay runs, the live feed is ignored.
+
+1. Choose a token and put it in `docker/.env` (git-ignored), then rebuild:
+   ```
+   REPLAY_TOKEN=some-long-random-string
+   ```
+   Without a token the replay API answers `503` and nothing can be started.
+2. Open `http://<host>:3000/replay`, enter the token, and press **Play** on a recording. Each recording has a speed multiplier (0.1-100) and, for races and sprints, a starting lap. While playing you can change the speed, jump to any lap, or return to live data.
+
+The same actions are available over HTTP with the header `x-replay-token: <token>` (or `Authorization: Bearer <token>`):
+
+*   `GET /replay/api/recordings`, `GET /replay/api/status`
+*   `POST /replay/api/start` with `{"slot":"race","speed":1,"lap":20}` (`speed` and `lap` optional)
+*   `POST /replay/api/speed` with `{"speed":5}`, `POST /replay/api/jump` with `{"lap":30}`, `POST /replay/api/live`
+
+Notes: the session clock is only correct at 1x, because the app counts it down in real time. Jumping rebuilds the state from the start of the recording, so it can take a second on a long race. A recording that begins after the session started (for example the container was restarted mid-race) is marked **PARTIAL**.
 
 ---
 ## Available Endpoints

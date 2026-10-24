@@ -349,7 +349,7 @@ internal fun GrandPrixRaceCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "WEEKEND SESSIONS (LOCAL TIME)",
+                        text = "WEEKEND SESSIONS",
                         color = F1TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

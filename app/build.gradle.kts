@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "rocks.urzahil.f1livetiming"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.f1timing.qxvrta"
+    applicationId = "rocks.urzahil.f1livetiming"
     minSdk = 24
     targetSdk = 36
     versionCode = 15

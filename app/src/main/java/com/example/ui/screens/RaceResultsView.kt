@@ -142,14 +142,14 @@ internal fun RaceResultsView(
                     .fillMaxWidth()
                     .background(F1CardSurface, RoundedCornerShape(6.dp))
                     .border(1.dp, if (isWinner) ColorxFFFFD700.copy(alpha = 0.5f) else F1CardBorder, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Pos
                 Text(
                     text = pos,
                     color = badgeColor,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.width(26.dp)
@@ -192,7 +192,7 @@ internal fun RaceResultsView(
                             Text(
                                 text = item.driver?.familyName.orEmpty().ifBlank { item.driver?.fullName.orEmpty() },
                                 color = F1TextPrimary,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false,

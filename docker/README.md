@@ -29,8 +29,6 @@ This guide explains how to host your own instance of the [`julesr0y/f1-livetimin
 
 The image pins a specific upstream commit and applies the patches in `patches/` in filename order (session-change state reset and index-keyed array deltas; the session clock from the `ExtrapolatedClock` channel, returned by `/api/session`). After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
-Patch `03-record-replay.patch` and the `replay/` folder add session recording and replay, described [below](#recording-and-replay).
-
 To stop the backend:
 ```bash
 docker compose down
@@ -55,7 +53,7 @@ docker logs -f f1-livetiming-api
 
 ## Recording and Replay
 
-While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint. A newer session of the same type overwrites the older one. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
+While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint race. A newer session of the same type overwrites the older one. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
 
 A recording is saved when the next session starts, and also as a checkpoint once timing data has been quiet for 10 minutes, so a session is replayable shortly after it ends. Anything shorter than 100 messages or 60 seconds is discarded, and it never replaces a fuller recording of the same session.
 

@@ -7,27 +7,21 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 ## Features
 
 ### Live timing
-- Live driver leaderboard with best and last laps, sector times and gaps that follow the session format:
-  - Races and sprints: time gap to the leader and interval to the car ahead
-  - Practice: best-lap gap to the fastest driver and to the car ahead
-  - Qualifying: best-lap gaps from the latest part (Q1/Q2/Q3) with a time
-- Session progress above the table: lap counter (`LAP 17 / 44`) in races and sprints, session clock (`REMAINING 42:17`) in practice and qualifying. The clock ticks every second and holds while it is stopped (red flag, between Q parts); the dot is green while it runs and yellow while it is stopped
-- Race control box below the classification with the 5 latest messages (track limits, flags, safety car…) in local time
-- Session status and track-status flags (green, yellow, red, SC, VSC)
-- Track weather: air and track temperature, humidity, pressure, wind and rain
-- Per-driver tyre compounds and full stint history; no badge is shown until a driver has tyre data
-- Data is cleared when a new session loads, so nothing from the previous session carries over
+- Live driver leaderboard
+- Real time session progress above the table
+- Race control messages
+- Session status and track status
+- Track weather
+- Full tyre stint history
 - Automatic polling every 5 s while a session is live
 
 ### Standings
 - Drivers' and constructors' championships for the current season
 
 ### Calendar and weekends
-- Season race calendar, with a pill for every session of the weekend (practice, sprint qualifying, sprint, qualifying, race)
-- Session times are converted from UTC to the device's time zone, including daylight saving on the session's own date, so a weekend that spans a clock change shows each session correctly
-- Times are hidden once a session has started; its pill keeps its size and shows just the session name
-- Weekend detail screen with the results of each session: race, sprint, qualifying, sprint qualifying and practice timings. A session that has not run yet shows when it is scheduled
-
+- Season race calendar
+- Weekend detail screen with the results of each session
+- 
 ## How it works
 
 The app combines two data sources:
@@ -41,14 +35,7 @@ The live backend URL can be changed at any time from settings.
 
 ### Live backend
 
-[`docker/`](docker/) builds the backend from a pinned upstream commit with three local patches from [`docker/patches/`](docker/patches/), applied in filename order:
-
-1. **`01-session-state.patch`** clears the cached state when a new session loads and on every reconnect snapshot, so the previous session's tyres and gaps don't carry over. It also applies F1's partial list updates (stints, sectors) entry by entry instead of dropping the rest of the list.
-2. **`02-extrapolated-clock.patch`** subscribes to F1's session clock (`ExtrapolatedClock`) and returns it from `/api/session`.
-3. **`03-record-replay.patch`** wires session recording and replay into the client and server (the code itself is in [`docker/replay/`](docker/replay/)):
-   - The container records the raw feed of each live session and keeps the latest recording per session type (practice, qualifying, sprint qualifying, race, sprint) in a Docker volume
-   - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
-   - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
+[`docker/`](docker/) builds the backend from a pinned upstream commit with local patches from [`docker/patches/`](docker/patches/).
 
 The Dockerfile also serves the upstream JSDoc site at `/docs`, which upstream advertises but never mounts.
 

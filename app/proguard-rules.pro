@@ -22,5 +22,5 @@
 
 # Retrofit/Moshi use model constructors, generic signatures and annotations at runtime.
 -keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations, AnnotationDefault
--keep class com.example.data.model.** { *; }
--keep interface com.example.data.api.** { *; }
+-keep class rocks.urzahil.f1livetiming.data.model.** { *; }
+-keep interface rocks.urzahil.f1livetiming.data.api.** { *; }

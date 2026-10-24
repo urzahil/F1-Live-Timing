@@ -12,8 +12,8 @@ android {
     applicationId = "com.aistudio.f1timing.qxvrta"
     minSdk = 24
     targetSdk = 36
-    versionCode = 8
-    versionName = "1.6.2"
+    versionCode = 15
+    versionName = "1.7.8"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

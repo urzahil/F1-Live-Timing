@@ -29,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -252,6 +254,8 @@ internal fun WeekendSessionPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isPast = isSessionInPast(session.date, session.time)
+    // Past sessions keep the text laid out but invisible so every pill stays the same size.
     val (sDate, sTime) = formatUtcToLocalShort(session.date, session.time)
 
     val (badgeBg, badgeText, badgeBorder) = when (session.type) {
@@ -301,7 +305,9 @@ internal fun WeekendSessionPill(
             .testTag("session_pill_${session.type.name}"),
         contentAlignment = Alignment.Center
     ) {
+        // For past sessions this column is invisible but still sizes the pill; the badge is redrawn centred below.
         Column(
+            modifier = if (isPast) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -347,6 +353,29 @@ internal fun WeekendSessionPill(
                         RoundedCornerShape(1.dp)
                     )
             )
+        }
+        if (isPast) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = badgeLabel,
+                    color = if (isSelected) activeText else badgeText,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 11.sp,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(1.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .height(1.5.dp)
+                        .background(
+                            if (isSelected) activeBorder else Color.Transparent,
+                            RoundedCornerShape(1.dp)
+                        )
+                )
+            }
         }
     }
 }
@@ -408,15 +437,17 @@ internal fun SessionNotRunView(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            Text(
-                text = "Scheduled for: $localDate · $localTime",
-                color = ColorxFFFFD700,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold
-            )
+            if (!isSessionInPast(sessionSchedule.first, sessionSchedule.second)) {
+                Text(
+                    text = "Scheduled for: $localDate · $localTime",
+                    color = ColorxFFFFD700,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold
+                )
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             Text(
                 text = "Official FIA classification and telemetry will be available here immediately after the session concludes.",

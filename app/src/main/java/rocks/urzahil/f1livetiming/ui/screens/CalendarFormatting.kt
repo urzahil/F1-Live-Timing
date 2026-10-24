@@ -44,6 +44,21 @@ internal fun formatUtcToLocal(dateStr: String?, timeStr: String?): Pair<String, 
     }
 }
 
+/** True once the session's UTC start time has passed; unparseable or missing dates count as not past. */
+internal fun isSessionInPast(dateStr: String?, timeStr: String?): Boolean {
+    if (dateStr.isNullOrBlank()) return false
+    val time = timeStr?.replace("Z", "")?.trim().takeUnless { it.isNullOrBlank() }
+        ?.let { if (it.length == 5) "$it:00" else it } ?: "23:59:59"
+    return try {
+        val start = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.parse("${dateStr.trim()}T$time") ?: return false
+        start.time < System.currentTimeMillis()
+    } catch (_: Exception) {
+        false
+    }
+}
+
 internal fun formatUtcToLocalShort(dateStr: String?, timeStr: String?): Pair<String, String> {
     if (dateStr.isNullOrBlank()) return Pair("--", "")
     val time = if (!timeStr.isNullOrBlank()) {

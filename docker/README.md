@@ -27,7 +27,16 @@ This guide explains how to host your own instance of the [`julesr0y/f1-livetimin
    docker compose logs -f f1-livetiming-api
    ```
 
-The image pins a specific upstream commit and applies the patches in `patches/` in filename order (session-change state reset and index-keyed array deltas; the session clock from the `ExtrapolatedClock` channel, returned by `/api/session`). After pulling changes to this folder, rebuild with `docker compose up -d --build`.
+The image pins a specific upstream commit and applies the patches in `patches/` in filename order:
+
+1. **`01-session-state.patch`** clears the cached state when a new session loads and on every reconnect snapshot, so the previous session's tyres and gaps don't carry over. It also applies F1's partial list updates (stints, sectors) entry by entry instead of dropping the rest of the list.
+2. **`02-extrapolated-clock.patch`** subscribes to F1's session clock (`ExtrapolatedClock`) and returns it from `/api/session`.
+3. **`03-record-replay.patch`** wires session recording and replay into the client and server (the code itself is in [`docker/replay/`](docker/replay/)):
+   - The container records the raw feed of each live session and keeps the latest recording per session type (practice, qualifying, sprint qualifying, race, sprint) in a Docker volume
+   - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
+   - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
+
+After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
 To stop the backend:
 ```bash

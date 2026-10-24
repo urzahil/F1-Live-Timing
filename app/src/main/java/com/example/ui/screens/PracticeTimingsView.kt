@@ -129,14 +129,14 @@ internal fun PracticeTimingsView(
                         if (isLeader) ColorxFFFFD700.copy(alpha = 0.5f) else F1CardBorder,
                         RoundedCornerShape(6.dp)
                     )
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Pos
                 Text(
                     text = pos,
                     color = if (isLeader) ColorxFFFFD700 else F1TextPrimary,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.width(26.dp)
@@ -178,7 +178,7 @@ internal fun PracticeTimingsView(
                         Text(
                             text = item.driver?.familyName.orEmpty().ifBlank { item.driver?.fullName.orEmpty() },
                             color = F1TextPrimary,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,

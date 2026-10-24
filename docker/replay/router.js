@@ -31,6 +31,10 @@ function createReplayRouter(f1Client) {
         res.sendFile(path.join(__dirname, 'ui.html'));
     });
 
+    router.get('/F1.svg', (req, res) => {
+        res.sendFile(path.join(__dirname, 'F1.svg'));
+    });
+
     const api = express.Router();
     api.use((req, res, next) => {
         if (!token) {

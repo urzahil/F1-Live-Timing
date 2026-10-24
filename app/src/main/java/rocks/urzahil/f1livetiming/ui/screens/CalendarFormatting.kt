@@ -33,7 +33,8 @@ internal fun formatUtcToLocal(dateStr: String?, timeStr: String?): Pair<String, 
 
         val formattedDate = localDateFormat.format(parsedDate)
         val formattedTime = if (!timeStr.isNullOrBlank()) {
-            val tzShort = TimeZone.getDefault().getDisplayName(false, TimeZone.SHORT)
+            val zone = TimeZone.getDefault()
+            val tzShort = zone.getDisplayName(zone.inDaylightTime(parsedDate), TimeZone.SHORT)
             "${localTimeFormat.format(parsedDate)} ($tzShort)"
         } else {
             ""

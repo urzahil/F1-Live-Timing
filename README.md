@@ -20,8 +20,8 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 
 ### Calendar and weekends
 - Season race calendar
-- Weekend detail screen with the results of each session
-- 
+- Results of each session
+
 ## How it works
 
 The app combines two data sources:

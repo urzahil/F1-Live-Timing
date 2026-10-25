@@ -49,8 +49,9 @@ class Replayer {
 
     parseSpeed(value) {
         const speed = value === undefined || value === null ? 1 : Number(value);
-        if (!Number.isFinite(speed) || speed < MIN_SPEED || speed > MAX_SPEED) {
-            throw httpError(400, `Speed must be between ${MIN_SPEED} and ${MAX_SPEED}.`);
+        // 0 pauses: the position freezes, so every endpoint keeps returning the same data until the speed changes.
+        if (!Number.isFinite(speed) || (speed !== 0 && speed < MIN_SPEED) || speed > MAX_SPEED) {
+            throw httpError(400, `Speed must be 0 (paused) or between ${MIN_SPEED} and ${MAX_SPEED}.`);
         }
         return speed;
     }
@@ -127,6 +128,9 @@ class Replayer {
         this.base = this.position();
         this.wallStart = Date.now();
         this.speed = speed;
+        // A paused replay has no timer, so restart the loop (it also re-times the wait for the new rate).
+        this.halt();
+        this.tick();
     }
 
     /**
@@ -185,6 +189,8 @@ class Replayer {
             this.finished = true;
             return;
         }
+        // Paused: nothing is due until setSpeed() restarts the loop.
+        if (this.speed === 0) return;
         const wait = Math.min(MAX_SLEEP_MS, Math.max(1, (rec.ts[this.idx] - pos) / this.speed));
         this.timer = setTimeout(() => this.tick(), wait);
     }
@@ -194,7 +200,8 @@ class Replayer {
             const rec = this.rec;
             const msg = JSON.parse(rec.bodies[i]);
             // Wall time at which this record would have been emitted, mapped onto its original wall clock.
-            const shift = Date.now() - (pos - rec.ts[i]) / this.speed - rec.ws[i];
+            // While paused (speed 0) treat the rate as 1 so the shift stays finite.
+            const shift = Date.now() - (pos - rec.ts[i]) / (this.speed || 1) - rec.ws[i];
             if (msg.k === 's') {
                 if (msg.d.ExtrapolatedClock) rebaseClock(msg.d.ExtrapolatedClock, shift);
                 this.client.handleSnapshot(msg.d);

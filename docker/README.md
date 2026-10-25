@@ -35,6 +35,7 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - The container records the raw feed of each live session and keeps the latest recording per session type (practice, qualifying, sprint qualifying, race, sprint) in a Docker volume
    - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
    - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
+4. **`04-fia-documents.patch`** mounts `GET /api/documents`, which lists the FIA decision documents of a grand prix (the code is in [`docker/fia-docs/`](fia-docs/)). See [FIA Documents](#fia-documents) below.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -87,6 +88,36 @@ The same actions are available over HTTP with the header `x-replay-token: <token
 Notes: the session clock is only correct at 1x, because the app counts it down in real time. Jumping rebuilds the state from the start of the recording, so it can take a second on a long race. A recording that begins after the session started (for example the container was restarted mid-race) is marked **PARTIAL**.
 
 ---
+
+## FIA Documents
+
+The container keeps a local copy of the FIA decision documents listed by `https://api.f1cosmos.com/docs/fia`, in `fia-docs.json` in the same `f1-recordings` volume as the recordings.
+
+- On the first start, or whenever that file is missing or empty, it reads every page of the list (about 23 pages of 100) and saves them all. If any page fails, nothing is saved and it tries again 5 minutes later.
+- Afterwards it checks once an hour, reading from the newest page onward and stopping at the first page holding a document it already has. Published documents never change, so this is usually a single request.
+
+`GET /api/documents?year=2026&round=18` returns the documents of that round, newest first:
+
+```json
+{
+  "year": 2026,
+  "round": 18,
+  "lastRefreshAt": "2026-10-25T11:49:06.694Z",
+  "documents": [
+    {
+      "id": 2295,
+      "title": "Doc 44 - Provisional Starting Grid",
+      "category": ["Grid/Points"],
+      "file_url": "https://www.fia.com/system/files/decision-document/2026_united_states_grand_prix_-_provisional_starting_grid.pdf",
+      "published_at": "2026-10-25T00:31:00.000Z"
+    }
+  ]
+}
+```
+
+A round with no documents returns an empty list. A missing or non-numeric `year` or `round` answers `400`, and `503` means the first load has not finished yet.
+
+---
 ## Available Endpoints
 
 *   `GET /api/status`: Health check, connection state (`CONNECTED` or `DISCONNECTED`), uptime, and timestamp.
@@ -99,3 +130,4 @@ Notes: the session clock is only correct at 1x, because the app counts it down i
 *   `GET /api/weather`: Real-time track weather (air temp, track temp, humidity, pressure, wind speed, rain sensor).
 *   `GET /api/race-control`: Official FIA track status flags (GREEN, YELLOW, RED, SC, VSC).
 *   `GET /api/radio`: Team radio telemetry broadcasts.
+*   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).

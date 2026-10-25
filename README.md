@@ -22,6 +22,10 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 - Season race calendar
 - Results of each session
 
+### More tools
+Opened from the ⋮ menu in the top bar, which also holds the backend settings.
+- Championship predictor: who can still mathematically win the drivers' and constructors' titles, based on the points left on the calendar
+
 ## How it works
 
 The app combines two data sources:

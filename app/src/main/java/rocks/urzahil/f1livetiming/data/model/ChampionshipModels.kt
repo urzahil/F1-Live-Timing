@@ -7,6 +7,13 @@ import com.squareup.moshi.JsonClass
  * Data models for Ergast/Jolpica public F1 API (Season Championship & Calendar)
  */
 
+/** A standings table as returned by the repository, with the round it was last updated after. */
+data class StandingsResult<T>(
+    val season: String,
+    val items: List<T>,
+    val round: Int?
+)
+
 // --- Driver Standings ---
 
 @JsonClass(generateAdapter = true)

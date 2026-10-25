@@ -18,14 +18,18 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsMotorsports
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +42,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,9 +59,14 @@ import rocks.urzahil.f1livetiming.ui.components.DriverTyreStintDialog
 import rocks.urzahil.f1livetiming.ui.components.ServerSettingsDialog
 import rocks.urzahil.f1livetiming.ui.components.WeatherDialog
 import rocks.urzahil.f1livetiming.ui.screens.CalendarScreen
+import rocks.urzahil.f1livetiming.ui.screens.ChampionshipPredictorScreen
 import rocks.urzahil.f1livetiming.ui.screens.LiveTimingScreen
+import rocks.urzahil.f1livetiming.ui.screens.MoreToolsScreen
 import rocks.urzahil.f1livetiming.ui.screens.StandingsScreen
+import rocks.urzahil.f1livetiming.ui.screens.ToolPageScaffold
+import rocks.urzahil.f1livetiming.ui.screens.pageTitle
 import rocks.urzahil.f1livetiming.ui.theme.F1CarbonBackground
+import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1LiveTimingTheme
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1Red
@@ -63,6 +75,7 @@ import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
 import rocks.urzahil.f1livetiming.ui.theme.F1TextSecondary
 import rocks.urzahil.f1livetiming.ui.viewmodel.F1Tab
 import rocks.urzahil.f1livetiming.ui.viewmodel.F1ViewModel
+import rocks.urzahil.f1livetiming.ui.viewmodel.MoreTool
 
 class MainActivity : ComponentActivity() {
 
@@ -129,6 +142,40 @@ fun MainContent(viewModel: F1ViewModel) {
 
     val calendarListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
+    val standingsRound by viewModel.standingsRound.collectAsStateWithLifecycle()
+    val showMoreTools by viewModel.showMoreTools.collectAsStateWithLifecycle()
+    val selectedMoreTool by viewModel.selectedMoreTool.collectAsStateWithLifecycle()
+    var overflowMenuOpen by remember { mutableStateOf(false) }
+
+    // "More tools" pages cover the whole screen; back returns from a tool to the hub, then to the tabs
+    selectedMoreTool?.let { tool ->
+        ToolPageScaffold(title = tool.pageTitle, onBack = { viewModel.openMoreTool(null) }) { contentPadding ->
+            when (tool) {
+                MoreTool.CHAMPIONSHIP_PREDICTOR -> ChampionshipPredictorScreen(
+                    drivers = driverStandings,
+                    constructors = constructorStandings,
+                    calendar = calendarRaces,
+                    standingsRound = standingsRound,
+                    isLoading = isChampionshipLoading || isCalendarLoading,
+                    error = championshipError ?: calendarError,
+                    onRetry = {
+                        viewModel.loadChampionshipData()
+                        viewModel.loadCalendarData()
+                    },
+                    contentPadding = contentPadding
+                )
+            }
+        }
+        return
+    }
+    if (showMoreTools) {
+        MoreToolsScreen(
+            onOpenTool = { tool -> viewModel.openMoreTool(tool) },
+            onBack = { viewModel.setMoreToolsVisible(false) }
+        )
+        return
+    }
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -170,44 +217,73 @@ fun MainContent(viewModel: F1ViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.togglePolling() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("toggle_polling_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isPolling) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPolling) "Pause Polling" else "Resume Polling",
-                            tint = if (isPolling) Color(0xFF2ECC71) else F1TextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    // Polling controls only affect live timing, so they only show on that tab
+                    if (selectedTab == F1Tab.LIVE_TIMING) {
+                        IconButton(
+                            onClick = { viewModel.togglePolling() },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("toggle_polling_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isPolling) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPolling) "Pause Polling" else "Resume Polling",
+                                tint = if (isPolling) Color(0xFF2ECC71) else F1TextMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.refreshLive() },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("refresh_live_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = F1TextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                    IconButton(
-                        onClick = { viewModel.refreshLive() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("refresh_live_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = F1TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.setSettingsDialogVisible(true) },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("settings_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Backend Settings",
-                            tint = F1TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Box {
+                        IconButton(
+                            onClick = { overflowMenuOpen = true },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("overflow_menu_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = F1TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = overflowMenuOpen,
+                            onDismissRequest = { overflowMenuOpen = false },
+                            modifier = Modifier.background(F1CardSurface)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("More tools", color = F1TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Apps, contentDescription = null, tint = F1TextSecondary) },
+                                onClick = {
+                                    overflowMenuOpen = false
+                                    viewModel.setMoreToolsVisible(true)
+                                },
+                                modifier = Modifier.testTag("menu_more_tools")
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Settings", color = F1TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, tint = F1TextSecondary) },
+                                onClick = {
+                                    overflowMenuOpen = false
+                                    viewModel.setSettingsDialogVisible(true)
+                                },
+                                modifier = Modifier.testTag("settings_button")
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

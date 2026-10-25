@@ -260,7 +260,10 @@ class Recorder {
     noteStatus(status) {
         const value = status && String(status.Status || '');
         if (!value) return;
-        this.current.ended = ['Finished', 'Finalised', 'Ends'].includes(value);
+        // Only a restart ('Started') reopens a session that was marked over; other statuses ('Inactive' in a
+        // reconnect snapshot, for instance) must not flip a finished session back to recording.
+        if (['Finished', 'Finalised', 'Ends'].includes(value)) this.current.ended = true;
+        else if (value === 'Started') this.current.ended = false;
     }
 
     /**

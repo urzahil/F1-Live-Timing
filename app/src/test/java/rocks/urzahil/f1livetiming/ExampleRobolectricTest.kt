@@ -197,9 +197,13 @@ class ExampleRobolectricTest {
       [
         {"RacingNumber":"4","Tla":"NOR","Position":"1","TimeDiffToFastest":"","TimeDiffToPositionAhead":""},
         {"RacingNumber":"81","Tla":"PIA","Position":"2","TimeDiffToFastest":"+0.215","TimeDiffToPositionAhead":"+0.215"},
-        {"RacingNumber":"16","Tla":"LEC","Position":"3",
+        {"RacingNumber":"16","Tla":"LEC","Position":"3","BestLapTime":{"Value":"1:35.200"},
          "Stats":[{"TimeDiffToFastest":"+0.400","TimeDiffToPositionAhead":"+0.100"},
                   {"TimeDiffToFastest":"+0.312","TimeDiffToPositionAhead":"+0.097"},
+                  {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""}]},
+        {"RacingNumber":"63","Tla":"RUS","Position":"5","BestLapTime":{"Value":""},
+         "Stats":[{"TimeDiffToFastest":"+0.500","TimeDiffToPositionAhead":"+0.050"},
+                  {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""},
                   {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""}]},
         {"RacingNumber":"44","Tla":"HAM","Position":"4","GapToLeader":"+5.1",
          "IntervalToPositionAhead":{"Value":"+1.2"},"TimeDiffToFastest":"+9.9"}
@@ -211,9 +215,12 @@ class ExampleRobolectricTest {
     assertEquals("LEADER", byCode.getValue("NOR").gapToLeader)
     assertEquals("+0.215", byCode.getValue("PIA").gapToLeader)
     assertEquals("+0.215", byCode.getValue("PIA").intervalToAhead)
-    // Q3 not yet set: use the latest part that has a value (Q2).
+    // Q3 not yet set but a lap is set in this part: use the latest part that has a value (Q2).
     assertEquals("+0.312", byCode.getValue("LEC").gapToLeader)
     assertEquals("+0.097", byCode.getValue("LEC").intervalToAhead)
+    // No lap yet in the current part: the earlier part's gap must not linger.
+    assertEquals("--", byCode.getValue("RUS").gapToLeader)
+    assertEquals("--", byCode.getValue("RUS").intervalToAhead)
     // Race fields still take precedence.
     assertEquals("+5.1", byCode.getValue("HAM").gapToLeader)
     assertEquals("+1.2", byCode.getValue("HAM").intervalToAhead)

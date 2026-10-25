@@ -71,7 +71,9 @@ data class ParsedDriverTiming(
     val isCurrentCompoundNew: Boolean,
     val stintsHistory: List<ParsedStint>,
     val isOverallBestLap: Boolean = false,
-    val isCatchingAhead: Boolean? = null
+    val isCatchingAhead: Boolean? = null,
+    /** Qualifying only: eliminated in Q1 or Q2. The screen hides these and counts them to tell which part is running. */
+    val isKnockedOut: Boolean = false
 )
 
 data class ParsedWeather(
@@ -666,7 +668,8 @@ class F1LiveRepository {
                         isCurrentCompoundNew = isNew,
                         stintsHistory = stints,
                         isOverallBestLap = false,
-                        isCatchingAhead = finalCatching
+                        isCatchingAhead = finalCatching,
+                        isKnockedOut = d.optBoolean("KnockedOut", false)
                     )
                 )
             }

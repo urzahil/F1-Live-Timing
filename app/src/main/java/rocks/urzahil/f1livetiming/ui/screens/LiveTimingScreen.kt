@@ -93,6 +93,9 @@ fun LiveTimingScreen(
     onNavigateToCalendar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Eliminated qualifying drivers are hidden; how many there are tells which part is running.
+    val visibleTimings = liveTimings.filterNot { it.isKnockedOut }
+    val qualifyingPart = qualifyingPartLabel(session, liveTimings.count { it.isKnockedOut })
     val hasSessionData = liveTimings.isNotEmpty() || session.sessionName.isNotBlank() || session.meetingName.isNotBlank()
     val isLiveSessionActive = (session.isLive || (showLatestSession && hasSessionData)) && liveTimings.isNotEmpty()
 
@@ -106,6 +109,7 @@ fun LiveTimingScreen(
             session = session,
             weather = weather,
             showLatestSession = showLatestSession,
+            qualifyingPart = qualifyingPart,
             onOpenWeather = onOpenWeather
         )
 
@@ -159,7 +163,7 @@ fun LiveTimingScreen(
             // Live Telemetry Driver Leaderboard
             val listState = rememberLazyListState()
             // In timed sessions a new P1 is the news, so bring the list back to the top when it changes hands.
-            val leaderId = liveTimings.firstOrNull { it.position == "1" }
+            val leaderId = visibleTimings.firstOrNull { it.position == "1" }
                 ?.let { it.racingNumber.ifBlank { it.driverCode } }
             // NOTE: to also scroll to the top in races and sprints, replace the line below with: CM
             // if (true) {
@@ -177,7 +181,7 @@ fun LiveTimingScreen(
             ) {
                 // Key on identity only: a key that includes the position collides (car 1 in P11 vs
                 // car 11 in P1) and crashes the list, and it recreates rows on every overtake.
-                items(liveTimings, key = { it.racingNumber.ifBlank { it.driverCode } }) { driver ->
+                items(visibleTimings, key = { it.racingNumber.ifBlank { it.driverCode } }) { driver ->
                     DriverTimingRow(
                         driver = driver,
                         isFastestLap = driver.isOverallBestLap,
@@ -271,11 +275,32 @@ private fun isTimedSession(session: ParsedSession): Boolean {
     return "practice" in name || "qualifying" in name || "shootout" in name
 }
 
+/**
+ * "Q1"/"Q2"/"Q3" (or "SQ1"… for sprint qualifying), or null outside qualifying. The feed does not name the
+ * part, so it is inferred from the eliminations: 6 drivers are out after Q1 and 12 after Q2.
+ */
+private fun qualifyingPartLabel(session: ParsedSession, knockedOut: Int): String? {
+    val type = session.sessionType.trim()
+    val name = session.sessionName.lowercase()
+    val isQualifying = type.equals("Qualifying", ignoreCase = true) ||
+        (type.isEmpty() && ("qualifying" in name || "shootout" in name))
+    if (!isQualifying) return null
+    val prefix = if ("sprint" in name || "shootout" in name) "SQ" else "Q"
+    val part = when {
+        // This consider 6 drivers knocked out per session, change accordingly if rules change CM
+        knockedOut >= 12 -> 3
+        knockedOut >= 6 -> 2
+        else -> 1
+    }
+    return "$prefix$part"
+}
+
 @Composable
 private fun SessionHeaderCard(
     session: ParsedSession,
     weather: ParsedWeather,
     showLatestSession: Boolean = false,
+    qualifyingPart: String? = null,
     onOpenWeather: () -> Unit
 ) {
     val isDisplayActive = session.isLive || (showLatestSession && (session.meetingName.isNotBlank() || session.sessionName.isNotBlank() || session.sessionType.isNotBlank()))
@@ -319,7 +344,7 @@ private fun SessionHeaderCard(
                     ) {
                         if (isDisplayActive && session.sessionType.isNotBlank()) {
                             Text(
-                                text = session.sessionType.uppercase(),
+                                text = session.sessionType.uppercase() + (qualifyingPart?.let { " · $it" } ?: ""),
                                 color = F1Red,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold

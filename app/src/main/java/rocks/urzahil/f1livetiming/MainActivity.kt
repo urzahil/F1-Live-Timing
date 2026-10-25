@@ -60,10 +60,12 @@ import rocks.urzahil.f1livetiming.ui.components.ServerSettingsDialog
 import rocks.urzahil.f1livetiming.ui.components.WeatherDialog
 import rocks.urzahil.f1livetiming.ui.screens.CalendarScreen
 import rocks.urzahil.f1livetiming.ui.screens.ChampionshipPredictorScreen
+import rocks.urzahil.f1livetiming.ui.screens.FiaDocumentsScreen
 import rocks.urzahil.f1livetiming.ui.screens.LiveTimingScreen
 import rocks.urzahil.f1livetiming.ui.screens.MoreToolsScreen
 import rocks.urzahil.f1livetiming.ui.screens.StandingsScreen
 import rocks.urzahil.f1livetiming.ui.screens.ToolPageScaffold
+import rocks.urzahil.f1livetiming.ui.screens.fiaDocumentsTitle
 import rocks.urzahil.f1livetiming.ui.screens.pageTitle
 import rocks.urzahil.f1livetiming.ui.theme.F1CarbonBackground
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
@@ -145,11 +147,22 @@ fun MainContent(viewModel: F1ViewModel) {
     val standingsRound by viewModel.standingsRound.collectAsStateWithLifecycle()
     val showMoreTools by viewModel.showMoreTools.collectAsStateWithLifecycle()
     val selectedMoreTool by viewModel.selectedMoreTool.collectAsStateWithLifecycle()
+    val fiaDocuments by viewModel.fiaDocuments.collectAsStateWithLifecycle()
     var overflowMenuOpen by remember { mutableStateOf(false) }
 
     // "More tools" pages cover the whole screen; back returns from a tool to the hub, then to the tabs
     selectedMoreTool?.let { tool ->
-        ToolPageScaffold(title = tool.pageTitle, onBack = { viewModel.openMoreTool(null) }) { contentPadding ->
+        // The FIA documents tool has its own levels (race list, documents, viewer); back climbs them one by one
+        val isFiaDocuments = tool == MoreTool.FIA_DOCUMENTS
+        val title = (if (isFiaDocuments) fiaDocuments.fiaDocumentsTitle() else null) ?: tool.pageTitle
+        val onBack = {
+            when {
+                isFiaDocuments && fiaDocuments.document != null -> viewModel.openFiaDocument(null)
+                isFiaDocuments && fiaDocuments.race != null -> viewModel.selectFiaDocumentsRace(null)
+                else -> viewModel.openMoreTool(null)
+            }
+        }
+        ToolPageScaffold(title = title, onBack = onBack) { contentPadding ->
             when (tool) {
                 MoreTool.CHAMPIONSHIP_PREDICTOR -> ChampionshipPredictorScreen(
                     drivers = driverStandings,
@@ -162,6 +175,18 @@ fun MainContent(viewModel: F1ViewModel) {
                         viewModel.loadChampionshipData()
                         viewModel.loadCalendarData()
                     },
+                    contentPadding = contentPadding
+                )
+                MoreTool.FIA_DOCUMENTS -> FiaDocumentsScreen(
+                    races = calendarRaces,
+                    isCalendarLoading = isCalendarLoading,
+                    calendarError = calendarError,
+                    onRetryCalendar = { viewModel.loadCalendarData() },
+                    state = fiaDocuments,
+                    onSelectRace = { race -> viewModel.selectFiaDocumentsRace(race) },
+                    onRetryDocuments = { viewModel.loadFiaDocuments() },
+                    onOpenDocument = { document -> viewModel.openFiaDocument(document) },
+                    onRetryDocument = { viewModel.retryFiaDocument() },
                     contentPadding = contentPadding
                 )
             }

@@ -49,6 +49,20 @@ function classifySession(info) {
     return null;
 }
 
+/**
+ * @description Whether SessionInfo says the session's scheduled end is already well in the past. SessionInfo
+ * dates are local track time, with GmtOffset giving the difference to UTC.
+ * @param {Object} info - SessionInfo object ({ EndDate, GmtOffset, ... }).
+ * @returns {boolean} True when the session ended more than the checkpoint idle time ago.
+ */
+function sessionEndedLongAgo(info) {
+    const match = /^(-?)(\d+):(\d+)/.exec(String((info && info.GmtOffset) || ''));
+    const end = Date.parse(`${info && info.EndDate}Z`);
+    if (!match || !Number.isFinite(end)) return false;
+    const offsetMs = (match[1] ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) * 60 * 1000;
+    return Date.now() - (end - offsetMs) > CHECKPOINT_IDLE_MS;
+}
+
 function newStats() {
     return { messages: 0, durationMs: 0, firstLap: null, maxLap: 0, totalLaps: 0 };
 }
@@ -231,7 +245,7 @@ class Recorder {
         };
         const fd = fs.openSync(this.currentPath, 'w');
         fs.writeSync(fd, `${JSON.stringify(header)}\n`);
-        this.current = { fd, header, startedMs: Date.now(), stats: newStats(), checkpointed: 0, ended: false };
+        this.current = { fd, header, startedMs: Date.now(), stats: newStats(), checkpointed: 0, ended: sessionEndedLongAgo(info) };
         console.log(`[Recorder] Recording ${slot} (${header.meeting} - ${header.name}, key ${header.key})`);
     }
 
@@ -260,7 +274,10 @@ class Recorder {
     noteStatus(status) {
         const value = status && String(status.Status || '');
         if (!value) return;
-        this.current.ended = ['Finished', 'Finalised', 'Ends'].includes(value);
+        // Only a restart ('Started') reopens a session that was marked over; other statuses ('Inactive' in a
+        // reconnect snapshot, for instance) must not flip a finished session back to recording.
+        if (['Finished', 'Finalised', 'Ends'].includes(value)) this.current.ended = true;
+        else if (value === 'Started') this.current.ended = false;
     }
 
     /**

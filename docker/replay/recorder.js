@@ -146,6 +146,17 @@ class Recorder {
     }
 
     /**
+     * @returns {Object|null} The session being recorded right now ({slot, key, meeting, name, state, messages}),
+     * where state is 'recording' until the session is over, then 'over' until the next session starts.
+     */
+    activity() {
+        const cur = this.current;
+        if (!this.dir || !cur) return null;
+        const { slot, key, meeting, name } = cur.header;
+        return { slot, key, meeting, name, state: cur.ended ? 'over' : 'recording', messages: cur.stats.messages };
+    }
+
+    /**
      * @description Marks a recording as kept (exempt from replacement by newer sessions) or not. A kept
      * latest recording is archived when a newer session of its type is saved. Unkeeping an archived
      * recording deletes it, since it is no longer the latest of anything.
@@ -220,7 +231,7 @@ class Recorder {
         };
         const fd = fs.openSync(this.currentPath, 'w');
         fs.writeSync(fd, `${JSON.stringify(header)}\n`);
-        this.current = { fd, header, startedMs: Date.now(), stats: newStats(), checkpointed: 0 };
+        this.current = { fd, header, startedMs: Date.now(), stats: newStats(), checkpointed: 0, ended: false };
         console.log(`[Recorder] Recording ${slot} (${header.meeting} - ${header.name}, key ${header.key})`);
     }
 
@@ -235,6 +246,9 @@ class Recorder {
         if (kind === 's') noteLaps(cur.stats, data.LapCount);
         else if (channel === 'LapCount') noteLaps(cur.stats, parsePayload(data));
 
+        if (kind === 's') this.noteStatus(data.SessionStatus);
+        else if (channel === 'SessionStatus') this.noteStatus(parsePayload(data));
+
         // Weather keeps arriving after a session ends, so only timing data (or a snapshot) counts as activity.
         if (kind === 's' || channel === 'TimingData' || channel === 'TimingDataF1') {
             clearTimeout(this.checkpointTimer);
@@ -243,12 +257,19 @@ class Recorder {
         }
     }
 
+    noteStatus(status) {
+        const value = status && String(status.Status || '');
+        if (!value) return;
+        this.current.ended = ['Finished', 'Finalised', 'Ends'].includes(value);
+    }
+
     /**
      * @description Saves a copy of the recording so far while it stays open for further messages.
      */
     checkpoint() {
         const cur = this.current;
         if (!cur || cur.checkpointed === cur.stats.messages) return;
+        cur.ended = true;
         cur.checkpointed = cur.stats.messages;
         try {
             this.promote(cur.header, { ...cur.stats }, true);

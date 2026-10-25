@@ -64,6 +64,8 @@ docker logs -f f1-livetiming-api
 
 While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint race. A newer session of the same type overwrites the older one, unless you ticked **Keep** on it in the replay page: a kept recording is moved aside (still listed and replayable) when a newer session of its type is saved, and the new session is saved as the latest as usual. Unticking Keep on an archived recording deletes it. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
 
+The replay page highlights the session being recorded right now with a blinking red **RECORDING** badge, which turns into a green **SESSION OVER** badge once the feed reports the session as finished (or timing data has been quiet for 10 minutes) until the next session starts.
+
 A recording is saved when the next session starts, and also as a checkpoint once timing data has been quiet for 10 minutes, so a session is replayable shortly after it ends. Anything shorter than 100 messages or 60 seconds is discarded, and it never replaces a fuller recording of the same session.
 
 Replay feeds the stored messages through the same handlers as the live connection, at the original pace, so every `/api/*` endpoint answers as it does live. While a replay runs, the live feed is ignored.

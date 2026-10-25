@@ -32,6 +32,13 @@
   .rec { padding:10px 0; border-top:1px solid var(--line); }
   .rec:first-child { border-top:0; }
   .rec .title { font-weight:600; }
+  .rec.recording { border-left:4px solid var(--accent); padding-left:10px; }
+  .rec.over { border-left:4px solid var(--ok); padding-left:10px; }
+  .badge { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; font-size:12px; font-weight:600; color:#fff; vertical-align:middle; }
+  .badge.recording { background:var(--accent); }
+  .badge.recording::before { content:''; display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#fff; animation:blink 1s infinite; }
+  .badge.over { background:var(--ok); }
+  @keyframes blink { 50% { opacity:.25; } }
   #error { color:var(--accent); min-height:1.4em; }
 </style>
 </head>
@@ -113,13 +120,22 @@ function renderStatus(s) {
   $('position').textContent = fmt(s.positionMs) + ' / ' + fmt(s.durationMs) + ' at ' + s.speed + 'x' + lap;
 }
 
-function renderRecordings(list) {
+function renderRecordings(list, current) {
   const box = $('recordings');
   box.replaceChildren();
-  if (!list.length) { box.textContent = 'Nothing recorded yet. Recordings are saved when a live session ends.'; box.className = 'muted'; return; }
-  box.className = '';
+  if (current) {
+    const note = document.createElement('div'); note.className = 'rec ' + current.state;
+    const label = document.createElement('span'); label.className = 'badge ' + current.state; label.textContent = current.state === 'over' ? 'SESSION OVER' : 'RECORDING';
+    const text = document.createElement('span'); text.textContent = ' ' + (LABELS[current.slot] || current.slot) + ' - ' + (current.meeting || '') + ' ' + (current.name || '') + ' (' + current.messages + ' messages)';
+    note.append(label, text);
+    box.append(note);
+  }
+  if (!list.length) { const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'Nothing saved yet. Recordings are saved when a live session ends.'; box.append(empty); return; }
   for (const r of list) {
-    const row = document.createElement('div'); row.className = 'rec';
+    const row = document.createElement('div');
+    // The latest recording of the slot being recorded is the one that gets replaced when the session is saved.
+    const active = current && r.id === current.slot && r.key === current.key;
+    row.className = 'rec' + (active ? ' ' + current.state : '');
     const title = document.createElement('div'); title.className = 'title';
     title.textContent = (LABELS[r.slot] || r.slot) + ' - ' + (r.meeting || '') + ' ' + (r.name || '');
     const info = document.createElement('div'); info.className = 'muted';
@@ -155,8 +171,8 @@ async function refresh() {
   const [s, r] = await Promise.all([api('GET', '/status'), api('GET', '/recordings')]);
   renderStatus(s);
   // The poll must not rebuild the list while a speed or lap field is being edited.
-  const signature = JSON.stringify(r.recordings);
-  if (signature !== lastRecordings) { lastRecordings = signature; renderRecordings(r.recordings); }
+  const signature = JSON.stringify([r.recordings, r.current && { ...r.current, messages: 0 }]);
+  if (signature !== lastRecordings) { lastRecordings = signature; renderRecordings(r.recordings, r.current); }
 }
 
 $('save').onclick = () => {

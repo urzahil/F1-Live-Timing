@@ -58,7 +58,7 @@ function createReplayRouter(f1Client) {
     };
 
     api.get('/status', handle(() => replayer.status()));
-    api.get('/recordings', handle(() => ({ recordings: f1Client.recorder.list() })));
+    api.get('/recordings', handle(() => ({ recordings: f1Client.recorder.list(), current: f1Client.recorder.activity() })));
     api.post('/keep', handle((body) => {
         if (typeof body.keep !== 'boolean') {
             throw Object.assign(new Error('"keep" must be true or false.'), { status: 400 });

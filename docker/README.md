@@ -73,7 +73,7 @@ Replay feeds the stored messages through the same handlers as the live connectio
    REPLAY_TOKEN=some-long-random-string
    ```
    Without a token the replay API answers `503` and nothing can be started.
-2. Open `http://<host>:3000/replay`, enter the token, and press **Play** on a recording. Each recording has a speed multiplier (0.1-100) and, for races and sprints, a starting lap. While playing you can change the speed, jump to any lap, or return to live data.
+2. Open `http://<host>:3000/replay`, enter the token, and press **Play** on a recording. Each recording has a speed multiplier (0.1-100, or 0 to pause) and, for races and sprints, a starting lap. While playing you can change the speed, jump to any lap, or return to live data. Speed 0 freezes the position, so every `/api/*` endpoint keeps returning the same data, which is handy for debugging; set a speed again to resume. The session clock keeps counting down in the app while paused, because the app extrapolates it in real time.
 
 The same actions are available over HTTP with the header `x-replay-token: <token>` (or `Authorization: Bearer <token>`):
 

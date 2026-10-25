@@ -55,7 +55,7 @@
       <div class="muted" id="position"></div>
       <div class="row" style="margin-top:10px">
         <label for="liveSpeed">Speed</label>
-        <input id="liveSpeed" type="number" min="0.1" max="100" step="0.1" value="1">
+        <input id="liveSpeed" type="number" min="0" max="100" step="0.1" value="1" title="0 pauses">
         <button id="applySpeed">Apply</button>
         <label for="liveLap">Lap</label>
         <input id="liveLap" type="number" min="1" step="1">
@@ -126,7 +126,7 @@ function renderRecordings(list) {
     const laps = r.maxLap ? ' - laps ' + (r.partial ? r.firstLap + '-' : '') + r.maxLap + (r.totalLaps ? '/' + r.totalLaps : '') : '';
     info.textContent = new Date(r.startedAt).toLocaleString() + ' - ' + fmt(r.durationMs) + ' - ' + r.messages + ' messages' + laps + (r.partial ? ' - PARTIAL' : '');
     const controls = document.createElement('div'); controls.className = 'row'; controls.style.marginTop = '6px';
-    const speed = document.createElement('input'); speed.type = 'number'; speed.min = '0.1'; speed.max = '100'; speed.step = '0.1'; speed.value = '1'; speed.title = 'Speed';
+    const speed = document.createElement('input'); speed.type = 'number'; speed.min = '0'; speed.max = '100'; speed.step = '0.1'; speed.value = '1'; speed.title = 'Speed (0 pauses)';
     controls.append('Speed', speed);
     let lap = null;
     if (r.maxLap) {

@@ -1,5 +1,7 @@
 package rocks.urzahil.f1livetiming.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,7 +39,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,7 +157,19 @@ fun LiveTimingScreen(
             TableHeaderRow()
 
             // Live Telemetry Driver Leaderboard
+            val listState = rememberLazyListState()
+            // In timed sessions a new P1 is the news, so bring the list back to the top when it changes hands.
+            val leaderId = liveTimings.firstOrNull { it.position == "1" }
+                ?.let { it.racingNumber.ifBlank { it.driverCode } }
+            // NOTE: to also scroll to the top in races and sprints, replace the line below with: CM
+            // if (true) {
+            if (isTimedSession(session)) {
+                LaunchedEffect(leaderId) {
+                    if (leaderId != null) listState.animateScrollToItem(0)
+                }
+            }
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 8.dp),
@@ -164,6 +181,7 @@ fun LiveTimingScreen(
                     DriverTimingRow(
                         driver = driver,
                         isFastestLap = driver.isOverallBestLap,
+                        flashLastLap = isTimedSession(session),
                         onClick = { onSelectDriver(driver) }
                     )
                 }
@@ -387,10 +405,13 @@ private fun TableHeaderRow() {
     }
 }
 
+private val LastLapFlashColor = Color(0xFFFFD700)
+
 @Composable
 private fun DriverTimingRow(
     driver: ParsedDriverTiming,
     isFastestLap: Boolean,
+    flashLastLap: Boolean,
     onClick: () -> Unit
 ) {
     val teamColor = runCatching {
@@ -505,8 +526,26 @@ private fun DriverTimingRow(
             else -> F1TextPrimary
         }
 
+        // Flash when a new lap time arrives. The first value a row sees (initial load, scrolling the row
+        // back into view) is not a change, so it does not flash.
+        val flash = remember { Animatable(0f) }
+        if (flashLastLap) {
+            val seen = remember { booleanArrayOf(false) }
+            LaunchedEffect(driver.lastLapTime) {
+                val isTime = driver.lastLapTime != "--" && driver.lastLapTime.isNotBlank()
+                if (seen[0] && isTime) {
+                    flash.snapTo(1f)
+                    flash.animateTo(0f, tween(durationMillis = 1500))
+                }
+                seen[0] = true
+            }
+        }
+
+        Box(modifier = Modifier.weight(1.35f)) {
+        // Only as wide as its content, so the highlight does not spill over the empty space in the column.
         Row(
-            modifier = Modifier.weight(1.35f),
+            modifier = Modifier
+                .background(LastLapFlashColor.copy(alpha = 0.45f * flash.value), RoundedCornerShape(3.dp)),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -526,6 +565,7 @@ private fun DriverTimingRow(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
         }
 
         // Gap to Leader

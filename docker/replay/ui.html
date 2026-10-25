@@ -83,6 +83,7 @@ const $ = (id) => document.getElementById(id);
 const LABELS = { practice: 'Practice', qualifying: 'Qualifying', 'sprint-qualifying': 'Sprint Qualifying', race: 'Race', sprint: 'Sprint' };
 let token = '';
 let lastRecordings = '';
+let lastSpeed = null;
 try { token = localStorage.getItem('replayToken') || ''; } catch (e) {}
 $('token').value = token;
 
@@ -113,10 +114,14 @@ function renderStatus(s) {
   $('mode').textContent = replay ? 'REPLAY' : 'LIVE';
   $('mode').className = 'pill ' + (replay ? 'replay' : 'live');
   $('playback').hidden = !replay;
-  if (!replay) { $('what').textContent = 'Serving live data'; return; }
+  if (!replay) { lastSpeed = null; $('what').textContent = 'Serving live data'; return; }
   $('what').textContent = (LABELS[s.slot] || s.slot) + ' - ' + (s.meeting || '') + ' ' + (s.name || '') + (s.finished ? ' (finished)' : '');
   $('progress').style.width = Math.min(100, (s.positionMs / s.durationMs) * 100) + '%';
   const lap = s.lap !== null ? ' - lap ' + s.lap + (s.totalLaps ? '/' + s.totalLaps : '') : '';
+  // Show the speed the replay is actually running at, without overwriting a value being typed.
+  const speedField = $('liveSpeed');
+  if (document.activeElement !== speedField && String(s.speed) !== lastSpeed) speedField.value = s.speed;
+  lastSpeed = String(s.speed);
   $('position').textContent = fmt(s.positionMs) + ' / ' + fmt(s.durationMs) + ' at ' + s.speed + 'x' + lap;
 }
 

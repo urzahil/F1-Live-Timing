@@ -63,7 +63,7 @@ data class SessionResultsState(
 )
 
 /**
- * "FIA documents" tool: the race whose documents are listed, and the document shown in the PDF viewer.
+ * "FIA Documents" tool: the race whose documents are listed, and the document shown in the PDF viewer.
  * Both null means the race list is showing.
  */
 data class FiaDocumentsState(
@@ -202,6 +202,11 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private var fiaDocumentsJob: Job? = null
     private var fiaPdfJob: Job? = null
 
+    // The next weekend, set only once the backend has documents for it (it has not started yet)
+    private val _fiaUpcomingRace = MutableStateFlow<SeasonRaceItem?>(null)
+    val fiaUpcomingRace: StateFlow<SeasonRaceItem?> = _fiaUpcomingRace.asStateFlow()
+    private var fiaUpcomingJob: Job? = null
+
     private var pollingJob: Job? = null
     private var isAppVisible = false
     private var sessionResultsJob: Job? = null
@@ -319,8 +324,39 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             if (_driverStandings.value.isEmpty() && !_isChampionshipLoading.value) loadChampionshipData()
         }
         if (tool != null && _calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
-        // The FIA documents tool always opens on its race list
+        // The FIA Documents tool always opens on its race list
         selectFiaDocumentsRace(null)
+        if (tool == MoreTool.FIA_DOCUMENTS) checkFiaUpcomingRace()
+    }
+
+    /** Year and round the backend files [race]'s documents under, or null when the race has no round. */
+    private fun fiaDocumentsKey(race: SeasonRaceItem): Pair<Int, Int>? {
+        val year = race.season?.toIntOrNull() ?: _calendarSeason.value.toIntOrNull() ?: return null
+        val round = race.round?.toIntOrNull() ?: return null
+        return year to round
+    }
+
+    /** Lists the next weekend in the race list only when the FIA has already published documents for it. */
+    private fun checkFiaUpcomingRace() {
+        fiaUpcomingJob?.cancel()
+        fiaUpcomingJob = null
+        val race = FiaDocumentRaces.next(_calendarRaces.value, System.currentTimeMillis())
+        val key = race?.let { fiaDocumentsKey(it) }
+        if (race == null || key == null) {
+            _fiaUpcomingRace.value = null
+            return
+        }
+        val (year, round) = key
+        fiaUpcomingJob = viewModelScope.launch {
+            fiaDocumentsRepo.fetchDocuments(backendUrl.value, year, round).onSuccess { list ->
+                // Opening the race then shows these documents straight from the cache
+                fiaDocumentsCache["$year:$round"] = list
+                _fiaUpcomingRace.value = race.takeIf { list.isNotEmpty() }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                Log.w(TAG, "FIA documents check for the next race failed (${error.javaClass.simpleName})")
+            }
+        }
     }
 
     /** Opens the document list of [race], or returns to the race list when null. */
@@ -334,9 +370,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadFiaDocuments() {
         val race = _fiaDocuments.value.race ?: return
-        val year = (race.season?.toIntOrNull() ?: _calendarSeason.value.toIntOrNull())
-        val round = race.round?.toIntOrNull()
-        if (year == null || round == null) {
+        val (year, round) = fiaDocumentsKey(race) ?: run {
             _fiaDocuments.update { it.copy(error = "This race has no round number.") }
             return
         }
@@ -479,6 +513,8 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             result.onSuccess { (season, races) ->
                 _calendarSeason.value = season
                 _calendarRaces.value = races
+                // The tool may have been opened before the calendar arrived
+                if (_selectedMoreTool.value == MoreTool.FIA_DOCUMENTS) checkFiaUpcomingRace()
             }.onFailure { error ->
                 Log.w(TAG, "Season calendar request failed (${error.javaClass.simpleName})")
                 _calendarError.value = "Unable to load the season calendar. Please try again."

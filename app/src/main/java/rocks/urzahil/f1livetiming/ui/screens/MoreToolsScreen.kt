@@ -60,7 +60,7 @@ private fun MoreTool.info(): MoreToolInfo = when (this) {
         icon = Icons.Default.EmojiEvents
     )
     MoreTool.FIA_DOCUMENTS -> MoreToolInfo(
-        title = "FIA documents",
+        title = "FIA Documents",
         description = "Decisions, classifications and notices the FIA publishes for each race of the season",
         icon = Icons.Default.Description
     )

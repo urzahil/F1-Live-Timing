@@ -5,20 +5,25 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/** Picks the races of the season that can have FIA documents, for the "FIA documents" tool. */
+/** Picks the races of the season that can have FIA documents, for the "FIA Documents" tool. */
 object FiaDocumentRaces {
 
-    // The FIA starts publishing a weekend's documents a few days before first practice.
-    private const val PUBLISHING_LEAD_MILLIS = 7 * 24 * 60 * 60 * 1000L
-
-    /** Races whose weekend has started or starts within a week, most recent first. */
-    fun listed(races: List<SeasonRaceItem>, nowMillis: Long): List<SeasonRaceItem> =
+    /** Races whose weekend has started, most recent first; these are always listed. */
+    fun started(races: List<SeasonRaceItem>, nowMillis: Long): List<SeasonRaceItem> =
         races
-            .filter { race ->
-                val start = weekendStartMillis(race) ?: return@filter false
-                start - PUBLISHING_LEAD_MILLIS <= nowMillis
-            }
+            .filter { race -> weekendStartMillis(race)?.let { it <= nowMillis } ?: false }
             .sortedByDescending { it.round?.toIntOrNull() ?: 0 }
+
+    /**
+     * The next weekend that has not started yet. The FIA publishes its first documents a few days before
+     * first practice, so it is listed only once the backend returns documents for it.
+     */
+    fun next(races: List<SeasonRaceItem>, nowMillis: Long): SeasonRaceItem? =
+        races
+            .mapNotNull { race -> weekendStartMillis(race)?.let { start -> race to start } }
+            .filter { (_, start) -> start > nowMillis }
+            .minByOrNull { (_, start) -> start }
+            ?.first
 
     /** First practice start, or the race start for a weekend listed without practice sessions. */
     internal fun weekendStartMillis(race: SeasonRaceItem): Long? {

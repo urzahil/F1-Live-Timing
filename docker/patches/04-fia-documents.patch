@@ -1,0 +1,40 @@
+diff --git a/src/server.js b/src/server.js
+index 586ab2d..34f46b8 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -14,6 +14,7 @@ const { createTyresRouter } = require('./routes/tyres');
+ const { createDriversRouter } = require('./routes/drivers');
+ const { createSessionRouter } = require('./routes/session');
+ const { createReplayRouter } = require('./replay/router');
++const { FiaDocsCache, createDocumentsRouter } = require('./fia-docs/fia-docs');
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -47,6 +48,11 @@ app.use('/api', createSessionRouter(f1Client));
+ // Recording replay control page and token-protected API
+ app.use('/replay', createReplayRouter(f1Client));
+ 
++// FIA decision documents, cached in the data directory and refreshed hourly
++const fiaDocs = new FiaDocsCache(process.env.DATA_DIR || path.join(__dirname, '../data'));
++fiaDocs.start();
++app.use('/api/documents', createDocumentsRouter(fiaDocs));
++
+ /**
+  * GET /api/status
+  * Returns WebSocket connection state, uptime, and last received message timestamp.
+@@ -81,6 +87,7 @@ app.use((req, res) => {
+             '/api/weather',
+             '/api/race-control',
+             '/api/radio',
++            '/api/documents',
+             '/docs'
+         ]
+     });
+@@ -103,6 +110,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/weather`);
+     console.log(`    - GET http://localhost:${PORT}/api/race-control  (alias: /api/flags)`);
+     console.log(`    - GET http://localhost:${PORT}/api/radio         (alias: /api/team-radio)`);
++    console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });
+ 

@@ -18,12 +18,15 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 02 - Subscribes to ExtrapolatedClock and returns it from /api/session for the session timer.
 # 03 - Records each live session's raw feed and can replay it through the normal handlers (src/replay/,
 #      copied below; the patch only wires it into f1-client.js and server.js).
+# 04 - Mounts GET /api/documents, backed by a local cache of the FIA documents listed by api.f1cosmos.com
+#      (src/fia-docs/, copied below).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \
  && git apply /tmp/patches/*.patch \
  && rm -rf /tmp/patches
 COPY replay/ /app/src/replay/
+COPY fia-docs/ /app/src/fia-docs/
 
 # Install production dependencies only (express, cors, ws)
 RUN npm install --omit=dev
@@ -37,7 +40,7 @@ RUN sed -i "/^app.use((req, res) => {/i app.use('/docs', express.static(path.joi
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Recordings of the latest session per type; mount a volume here so they survive rebuilds
+# Recordings of the latest session per type and the FIA document cache; mount a volume here so they survive rebuilds
 ENV DATA_DIR=/app/data
 
 # Expose live timing server port

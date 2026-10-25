@@ -597,7 +597,7 @@ class F1LiveRepository {
 
                 val intervalRaw = extractValue(d, "IntervalToPositionAhead").trim()
                     .ifBlank { extractValue(d, "TimeDiffToPositionAhead").trim() }
-                    .ifBlank { if (hasLap) latestQualifyingStat(d, "TimeDiffToPositionAhead") else "" }
+                    .ifBlank { if (hasLap) latestQualifyingStat(d, "TimeDiffToPositionAhead", "TimeDifftoPositionAhead") else "" }
                 val intervalAhead = if (intervalRaw.isNotBlank()) intervalRaw else if (pos == "1") "-" else "--"
 
                 val lastLap = extractValue(d, "LastLapTime").trim().ifBlank { "--" }
@@ -729,11 +729,22 @@ class F1LiveRepository {
     }
 
     /** Value of [key] from the most recent qualifying part (last Stats entry) that has one. */
-    private fun latestQualifyingStat(obj: JSONObject, key: String): String {
+    private fun latestQualifyingStat(obj: JSONObject, vararg keys: String): String {
         val stats = optIndexedArray(obj, "Stats") ?: return ""
-        for (i in stats.length() - 1 downTo 0) {
-            val value = stats.optJSONObject(i)?.let { extractValue(it, key).trim() }.orEmpty()
-            if (value.isNotBlank()) return value
+        // Only the current part's entry counts: the leader has no gap in Q2/Q3, and walking back to
+        // an earlier part would show the gap he had in Q1 instead of LEADER.
+        val times = optIndexedArray(obj, "BestLapTimes")
+        val parts = if (times != null) {
+            val part = (times.length() - 1 downTo 0).firstOrNull {
+                times.optJSONObject(it)?.let { t -> extractValue(t, "Value").isNotBlank() } == true
+            } ?: return ""
+            listOf(part)
+        } else {
+            stats.length() - 1 downTo 0
+        }
+        for (i in parts) {
+            val entry = stats.optJSONObject(i) ?: continue
+            keys.map { extractValue(entry, it).trim() }.firstOrNull { it.isNotBlank() }?.let { return it }
         }
         return ""
     }

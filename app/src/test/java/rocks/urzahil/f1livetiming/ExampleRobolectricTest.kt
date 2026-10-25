@@ -205,6 +205,11 @@ class ExampleRobolectricTest {
          "Stats":[{"TimeDiffToFastest":"+0.500","TimeDiffToPositionAhead":"+0.050"},
                   {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""},
                   {"TimeDiffToFastest":"","TimeDiffToPositionAhead":""}]},
+        {"RacingNumber":"1","Tla":"VER","Position":"1","BestLapTime":{"Value":"1:34.471"},
+         "BestLapTimes":[{"Value":"1:35.215"},{"Value":"1:34.471"},{}],
+         "Stats":[{"TimeDiffToFastest":"+0.186","TimeDifftoPositionAhead":"+0.015"},
+                  {"TimeDiffToFastest":"","TimeDifftoPositionAhead":""},
+                  {"TimeDiffToFastest":"","TimeDifftoPositionAhead":""}]},
         {"RacingNumber":"44","Tla":"HAM","Position":"4","GapToLeader":"+5.1",
          "IntervalToPositionAhead":{"Value":"+1.2"},"TimeDiffToFastest":"+9.9"}
       ]
@@ -221,6 +226,9 @@ class ExampleRobolectricTest {
     // No lap yet in the current part: the earlier part's gap must not linger.
     assertEquals("--", byCode.getValue("RUS").gapToLeader)
     assertEquals("--", byCode.getValue("RUS").intervalToAhead)
+    // Leader in Q2 has no gap in this part; his Q1 gap must not show.
+    assertEquals("LEADER", byCode.getValue("VER").gapToLeader)
+    assertEquals("-", byCode.getValue("VER").intervalToAhead)
     // Race fields still take precedence.
     assertEquals("+5.1", byCode.getValue("HAM").gapToLeader)
     assertEquals("+1.2", byCode.getValue("HAM").intervalToAhead)

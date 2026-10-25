@@ -220,7 +220,7 @@ private fun SessionProgressRow(text: String, dotColor: Color, leadingLabel: Stri
         if (leadingLabel != null) {
             Text(
                 text = leadingLabel,
-                color = F1Red,
+                color = F1TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace,

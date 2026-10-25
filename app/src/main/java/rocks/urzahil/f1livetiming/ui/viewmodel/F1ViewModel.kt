@@ -8,6 +8,7 @@ import rocks.urzahil.f1livetiming.data.api.NetworkClient
 import rocks.urzahil.f1livetiming.data.api.PingResult
 import rocks.urzahil.f1livetiming.data.model.ConstructorStandingItem
 import rocks.urzahil.f1livetiming.data.model.DriverStandingItem
+import rocks.urzahil.f1livetiming.data.model.FiaDocument
 import rocks.urzahil.f1livetiming.data.model.PracticeTimingItem
 import rocks.urzahil.f1livetiming.data.model.QualifyingResultItem
 import rocks.urzahil.f1livetiming.data.model.RaceResultItem
@@ -16,11 +17,13 @@ import rocks.urzahil.f1livetiming.data.model.WeekendSessionType
 import rocks.urzahil.f1livetiming.data.repository.F1ChampionshipRepository
 import rocks.urzahil.f1livetiming.data.repository.CalendarResultsCache
 import rocks.urzahil.f1livetiming.data.repository.ExpiringListCache
+import rocks.urzahil.f1livetiming.data.repository.FiaDocumentsRepository
 import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
 import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
 import rocks.urzahil.f1livetiming.data.repository.ParsedSession
 import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 enum class F1Tab {
@@ -45,7 +49,8 @@ enum class StandingsCategory {
 
 /** Pages listed on the "More tools" screen; add an entry here and a branch in MainContent to add a tool. */
 enum class MoreTool {
-    CHAMPIONSHIP_PREDICTOR
+    CHAMPIONSHIP_PREDICTOR,
+    FIA_DOCUMENTS
 }
 
 /** Results for the selected race weekend, one list per session type. */
@@ -57,6 +62,21 @@ data class SessionResultsState(
     val practice: List<PracticeTimingItem> = emptyList()
 )
 
+/**
+ * "FIA documents" tool: the race whose documents are listed, and the document shown in the PDF viewer.
+ * Both null means the race list is showing.
+ */
+data class FiaDocumentsState(
+    val race: SeasonRaceItem? = null,
+    val documents: List<FiaDocument> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val document: FiaDocument? = null,
+    val pdfFile: File? = null,
+    val isPdfLoading: Boolean = false,
+    val pdfError: String? = null
+)
+
 class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
@@ -66,6 +86,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepo = ServerSettingsRepository(application)
     private val liveTimingCoordinator = LiveTimingCoordinator()
     private val championshipRepo = F1ChampionshipRepository()
+    private val fiaDocumentsRepo = FiaDocumentsRepository(application.cacheDir)
 
     val backendUrl: StateFlow<String> = settingsRepo.backendUrl
     val showLatestSession: StateFlow<Boolean> = settingsRepo.showLatestSession
@@ -172,6 +193,14 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     val sessionResults: StateFlow<SessionResultsState> = _sessionResults.asStateFlow()
 
     private val calendarResultsCache = CalendarResultsCache()
+
+    private val _fiaDocuments = MutableStateFlow(FiaDocumentsState())
+    val fiaDocuments: StateFlow<FiaDocumentsState> = _fiaDocuments.asStateFlow()
+
+    // Documents keep being published during a race weekend, so lists are only cached briefly.
+    private val fiaDocumentsCache = ExpiringListCache<String, FiaDocument>()
+    private var fiaDocumentsJob: Job? = null
+    private var fiaPdfJob: Job? = null
 
     private var pollingJob: Job? = null
     private var isAppVisible = false
@@ -288,8 +317,75 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _selectedMoreTool.value = tool
         if (tool == MoreTool.CHAMPIONSHIP_PREDICTOR) {
             if (_driverStandings.value.isEmpty() && !_isChampionshipLoading.value) loadChampionshipData()
-            if (_calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
         }
+        if (tool != null && _calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
+        // The FIA documents tool always opens on its race list
+        selectFiaDocumentsRace(null)
+    }
+
+    /** Opens the document list of [race], or returns to the race list when null. */
+    fun selectFiaDocumentsRace(race: SeasonRaceItem?) {
+        openFiaDocument(null)
+        fiaDocumentsJob?.cancel()
+        fiaDocumentsJob = null
+        _fiaDocuments.value = FiaDocumentsState(race = race)
+        if (race != null) loadFiaDocuments()
+    }
+
+    fun loadFiaDocuments() {
+        val race = _fiaDocuments.value.race ?: return
+        val year = (race.season?.toIntOrNull() ?: _calendarSeason.value.toIntOrNull())
+        val round = race.round?.toIntOrNull()
+        if (year == null || round == null) {
+            _fiaDocuments.update { it.copy(error = "This race has no round number.") }
+            return
+        }
+        val cacheKey = "$year:$round"
+        fiaDocumentsCache[cacheKey]?.let { cached ->
+            _fiaDocuments.update { it.copy(documents = cached, isLoading = false, error = null) }
+            return
+        }
+        fiaDocumentsJob?.cancel()
+        fiaDocumentsJob = viewModelScope.launch {
+            _fiaDocuments.update { it.copy(isLoading = true, error = null) }
+            fiaDocumentsRepo.fetchDocuments(backendUrl.value, year, round).onSuccess { list ->
+                fiaDocumentsCache[cacheKey] = list
+                _fiaDocuments.update { it.copy(documents = list, isLoading = false) }
+            }.onFailure { error ->
+                // A cancelled request must not write its error into the next race's state.
+                if (error is CancellationException) throw error
+                Log.w(TAG, "FIA documents request failed (${error.javaClass.simpleName})")
+                _fiaDocuments.update {
+                    it.copy(isLoading = false, error = "Unable to load the FIA documents. Please try again.")
+                }
+            }
+        }
+    }
+
+    /** Shows [document] in the PDF viewer, downloading it first; null closes the viewer. */
+    fun openFiaDocument(document: FiaDocument?) {
+        fiaPdfJob?.cancel()
+        fiaPdfJob = null
+        _fiaDocuments.update {
+            it.copy(document = document, pdfFile = null, isPdfLoading = false, pdfError = null)
+        }
+        val url = document?.fileUrl ?: return
+        fiaPdfJob = viewModelScope.launch {
+            _fiaDocuments.update { it.copy(isPdfLoading = true) }
+            fiaDocumentsRepo.downloadPdf(url).onSuccess { file ->
+                _fiaDocuments.update { it.copy(pdfFile = file, isPdfLoading = false) }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                Log.w(TAG, "FIA document download failed (${error.javaClass.simpleName})")
+                _fiaDocuments.update {
+                    it.copy(isPdfLoading = false, pdfError = "Unable to download this document.")
+                }
+            }
+        }
+    }
+
+    fun retryFiaDocument() {
+        openFiaDocument(_fiaDocuments.value.document)
     }
 
     private fun restartPolling() {

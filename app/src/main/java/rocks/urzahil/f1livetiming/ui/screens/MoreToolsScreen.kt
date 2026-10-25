@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,6 +58,11 @@ private fun MoreTool.info(): MoreToolInfo = when (this) {
         title = "Championship Predictor",
         description = "Who can still mathematically win the drivers' and constructors' titles",
         icon = Icons.Default.EmojiEvents
+    )
+    MoreTool.FIA_DOCUMENTS -> MoreToolInfo(
+        title = "FIA documents",
+        description = "Decisions, classifications and notices the FIA publishes for each race of the season",
+        icon = Icons.Default.Description
     )
 }
 

@@ -1,10 +1,12 @@
 package rocks.urzahil.f1livetiming.data.api
 
+import rocks.urzahil.f1livetiming.data.model.FiaDocumentsResponse
 import rocks.urzahil.f1livetiming.data.model.LiveStatusResponse
 import rocks.urzahil.f1livetiming.data.model.LiveWeatherResponse
 import okhttp3.ResponseBody
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Retrofit interface for self-hosted julesr0y/f1-livetiming-api backend
@@ -37,4 +39,7 @@ interface F1LiveApiService {
 
     @GET("api/lap-count")
     suspend fun getLapCountRaw(): ResponseBody
+
+    @GET("api/documents")
+    suspend fun getFiaDocuments(@Query("year") year: Int, @Query("round") round: Int): FiaDocumentsResponse
 }

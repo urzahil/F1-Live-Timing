@@ -582,19 +582,24 @@ class F1LiveRepository {
                     continue
                 }
 
+                val bestLap = extractValue(d, "BestLapTime").trim().ifBlank { "--" }
+
                 // Races report GapToLeader/IntervalToPositionAhead; practice reports TimeDiffToFastest/
                 // TimeDiffToPositionAhead instead, and qualifying keeps them per part (Q1-Q3) in Stats.
+                // The Stats fallback walks back to an earlier part when the current one is empty, so it is
+                // only used once the driver has a lap time in this part; otherwise Q1's gap would linger
+                // at the start of Q2/Q3.
+                val hasLap = bestLap != "--"
                 val gapRaw = extractValue(d, "GapToLeader").trim()
                     .ifBlank { extractValue(d, "TimeDiffToFastest").trim() }
-                    .ifBlank { latestQualifyingStat(d, "TimeDiffToFastest") }
+                    .ifBlank { if (hasLap) latestQualifyingStat(d, "TimeDiffToFastest") else "" }
                 val gapToLeader = if (gapRaw.isNotBlank()) gapRaw else if (pos == "1") "LEADER" else "--"
 
                 val intervalRaw = extractValue(d, "IntervalToPositionAhead").trim()
                     .ifBlank { extractValue(d, "TimeDiffToPositionAhead").trim() }
-                    .ifBlank { latestQualifyingStat(d, "TimeDiffToPositionAhead") }
+                    .ifBlank { if (hasLap) latestQualifyingStat(d, "TimeDiffToPositionAhead") else "" }
                 val intervalAhead = if (intervalRaw.isNotBlank()) intervalRaw else if (pos == "1") "-" else "--"
 
-                val bestLap = extractValue(d, "BestLapTime").trim().ifBlank { "--" }
                 val lastLap = extractValue(d, "LastLapTime").trim().ifBlank { "--" }
 
                 val sectorsArray = optIndexedArray(d, "Sectors")

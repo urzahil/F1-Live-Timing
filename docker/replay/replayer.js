@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const zlib = require('zlib');
-const { splitLine, parsePayload, SLOTS } = require('./recorder');
+const { splitLine, parsePayload } = require('./recorder');
 
 const MIN_SPEED = 0.1;
 const MAX_SPEED = 100;
@@ -57,8 +57,8 @@ class Replayer {
     }
 
     load(slot) {
+        if (!this.recorder.has(slot)) throw httpError(404, `No recording stored for "${slot}".`);
         const file = this.recorder.recordingPath(slot);
-        if (!fs.existsSync(file)) throw httpError(404, `No recording stored for "${slot}".`);
 
         const lines = zlib.gunzipSync(fs.readFileSync(file)).toString('utf-8').split('\n');
         const header = JSON.parse(lines[0]);
@@ -95,11 +95,10 @@ class Replayer {
 
     /**
      * @description Starts replaying a stored recording, replacing live data (or a running replay).
-     * @param {string} slot - Recording slot.
+     * @param {string} slot - Recording id: a slot name (latest of that type) or an archived kept recording.
      * @param {{speed?: number, lap?: number}} [opts] - Playback speed multiplier and lap to start from.
      */
     start(slot, opts = {}) {
-        if (!SLOTS.includes(slot)) throw httpError(400, `Unknown slot "${slot}".`);
         const speed = this.parseSpeed(opts.speed);
         const rec = this.load(slot);
         const target = this.lapIndex(rec, opts.lap);
@@ -228,7 +227,8 @@ class Replayer {
         const lapCount = this.client.getLapCount() || {};
         return {
             mode: 'replay',
-            slot: this.slot,
+            slot: this.rec.header.slot,
+            id: this.slot,
             name: this.rec.header.name,
             meeting: this.rec.header.meeting,
             speed: this.speed,

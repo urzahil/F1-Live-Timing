@@ -58,9 +58,18 @@ function createReplayRouter(f1Client) {
     };
 
     api.get('/status', handle(() => replayer.status()));
-    api.get('/recordings', handle(() => ({ recordings: f1Client.recorder.list() })));
+    api.get('/recordings', handle(() => ({ recordings: f1Client.recorder.list(), current: f1Client.recorder.activity() })));
+    api.post('/keep', handle((body) => {
+        if (typeof body.keep !== 'boolean') {
+            throw Object.assign(new Error('"keep" must be true or false.'), { status: 400 });
+        }
+        if (!f1Client.recorder.setKeep(body.id, body.keep)) {
+            throw Object.assign(new Error(`No recording stored for "${body.id}".`), { status: 404 });
+        }
+        return { recordings: f1Client.recorder.list() };
+    }));
     api.post('/start', handle((body) => {
-        replayer.start(body.slot, { speed: body.speed, lap: body.lap });
+        replayer.start(body.id || body.slot, { speed: body.speed, lap: body.lap });
         return replayer.status();
     }));
     api.post('/speed', handle((body) => {

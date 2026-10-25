@@ -62,7 +62,9 @@ docker logs -f f1-livetiming-api
 
 ## Recording and Replay
 
-While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint race. A newer session of the same type overwrites the older one. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
+While connected to the live feed the container records every session's raw SignalR messages (the full snapshot plus all deltas) and keeps the **latest recording per session type**: practice (FP1-FP3 share one slot), qualifying, sprint qualifying, race and sprint race. A newer session of the same type overwrites the older one, unless you ticked **Keep** on it in the replay page: a kept recording is moved aside (still listed and replayable) when a newer session of its type is saved, and the new session is saved as the latest as usual. Unticking Keep on an archived recording deletes it. Recordings live in the `f1-recordings` volume (`/app/data`) and survive rebuilds.
+
+The replay page highlights the session being recorded right now with a blinking red **RECORDING** badge, which turns into a green **SESSION OVER** badge once the feed reports the session as finished (or timing data has been quiet for 10 minutes) until the next session starts.
 
 A recording is saved when the next session starts, and also as a checkpoint once timing data has been quiet for 10 minutes, so a session is replayable shortly after it ends. Anything shorter than 100 messages or 60 seconds is discarded, and it never replaces a fuller recording of the same session.
 
@@ -78,7 +80,8 @@ Replay feeds the stored messages through the same handlers as the live connectio
 The same actions are available over HTTP with the header `x-replay-token: <token>` (or `Authorization: Bearer <token>`):
 
 *   `GET /replay/api/recordings`, `GET /replay/api/status`
-*   `POST /replay/api/start` with `{"slot":"race","speed":1,"lap":20}` (`speed` and `lap` optional)
+*   `POST /replay/api/start` with `{"id":"race","speed":1,"lap":20}` (`speed` and `lap` optional; `slot` is accepted as an alias, and archived kept recordings use the `id` shown by `GET /replay/api/recordings`)
+*   `POST /replay/api/keep` with `{"id":"race","keep":true}`
 *   `POST /replay/api/speed` with `{"speed":5}`, `POST /replay/api/jump` with `{"lap":30}`, `POST /replay/api/live`
 
 Notes: the session clock is only correct at 1x, because the app counts it down in real time. Jumping rebuilds the state from the start of the recording, so it can take a second on a long race. A recording that begins after the session started (for example the container was restarted mid-race) is marked **PARTIAL**.

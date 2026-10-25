@@ -66,7 +66,7 @@
   </div>
 
   <div class="card">
-    <div class="row" style="margin-bottom:6px"><strong>Recordings</strong><span class="muted">latest per session type</span></div>
+    <div class="row" style="margin-bottom:6px"><strong>Recordings</strong><span class="muted">latest per session type, plus the ones you keep</span></div>
     <div id="recordings"></div>
   </div>
 </main>
@@ -125,6 +125,15 @@ function renderRecordings(list) {
     const info = document.createElement('div'); info.className = 'muted';
     const laps = r.maxLap ? ' - laps ' + (r.partial ? r.firstLap + '-' : '') + r.maxLap + (r.totalLaps ? '/' + r.totalLaps : '') : '';
     info.textContent = new Date(r.startedAt).toLocaleString() + ' - ' + fmt(r.durationMs) + ' - ' + r.messages + ' messages' + laps + (r.partial ? ' - PARTIAL' : '');
+    const keepLabel = document.createElement('label'); keepLabel.style.cursor = 'pointer';
+    const keep = document.createElement('input'); keep.type = 'checkbox'; keep.checked = !!r.keep; 
+    keep.title = r.id.startsWith('archive-') ? 'Untick to delete this recording' : 'Keep this recording when a newer session of this type is saved';
+    keep.onchange = () => {
+      if (!keep.checked && r.id.startsWith('archive-') && !confirm('Delete this kept recording?')) { keep.checked = true; return; }
+      run(() => api('POST', '/keep', { id: r.id, keep: keep.checked }));
+    };
+    keepLabel.append(keep, ' Keep');
+    title.append(' ', keepLabel);
     const controls = document.createElement('div'); controls.className = 'row'; controls.style.marginTop = '6px';
     const speed = document.createElement('input'); speed.type = 'number'; speed.min = '0'; speed.max = '100'; speed.step = '0.1'; speed.value = '1'; speed.title = 'Speed (0 pauses)';
     controls.append('Speed', speed);
@@ -134,7 +143,7 @@ function renderRecordings(list) {
       controls.append('From lap', lap);
     }
     const play = document.createElement('button'); play.className = 'primary'; play.textContent = 'Play';
-    play.onclick = () => run(() => api('POST', '/start', { slot: r.slot, speed: Number(speed.value), lap: lap && lap.value ? Number(lap.value) : undefined }));
+    play.onclick = () => run(() => api('POST', '/start', { id: r.id, speed: Number(speed.value), lap: lap && lap.value ? Number(lap.value) : undefined }));
     controls.append(play);
     row.append(title, info, controls);
     box.append(row);

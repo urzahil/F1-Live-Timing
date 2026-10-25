@@ -1,7 +1,7 @@
 /**
  * @file recorder.js
  * @description Records the raw SignalR feed (snapshots and deltas) of each live session to disk, keeping only
- * the most recent recording per session slot. Recordings are replayed by replayer.js through the normal
+ * the most recent recording per session slot, plus any older recording the user marked as "keep". Recordings are replayed by replayer.js through the normal
  * F1LiveClient handlers, so every REST endpoint behaves exactly as it does live.
  *
  * File format (gzipped on promotion): the first line is a JSON header, every further line is
@@ -95,30 +95,73 @@ class Recorder {
         return path.join(this.dir, 'current.rec');
     }
 
-    recordingPath(slot) {
-        return path.join(this.dir, `${slot}.rec.gz`);
+    // A recording id is either a slot name (the latest of that type) or `archive-<slot>-<key>` (a kept
+    // recording that a newer session of the same type has since replaced as the latest).
+    recordingPath(id) {
+        return path.join(this.dir, `${id}.rec.gz`);
     }
 
-    metaPath(slot) {
-        return path.join(this.dir, `${slot}.json`);
+    metaPath(id) {
+        return path.join(this.dir, `${id}.json`);
     }
 
-    readMeta(slot) {
+    readMeta(id) {
         try {
-            return JSON.parse(fs.readFileSync(this.metaPath(slot), 'utf-8'));
+            return JSON.parse(fs.readFileSync(this.metaPath(id), 'utf-8'));
         } catch (e) {
             return null;
         }
     }
 
+    archiveId(meta) {
+        return `archive-${meta.slot}-${String(meta.key).replace(/[^\w.-]/g, '_')}`;
+    }
+
     /**
-     * @returns {Object[]} Metadata of every stored recording, in slot order.
+     * @returns {string[]} Ids of every stored recording: the latest per slot, then the archived kept ones.
+     */
+    ids() {
+        if (!this.dir) return [];
+        const archived = fs.readdirSync(this.dir)
+            .filter((file) => file.startsWith('archive-') && file.endsWith('.json'))
+            .map((file) => file.slice(0, -'.json'.length))
+            .sort();
+        return [...SLOTS, ...archived];
+    }
+
+    /**
+     * @param {string} id - Recording id.
+     * @returns {boolean} Whether a complete recording with this id is stored.
+     */
+    has(id) {
+        return typeof id === 'string' && this.ids().includes(id) && !!this.readMeta(id) && fs.existsSync(this.recordingPath(id));
+    }
+
+    /**
+     * @returns {Object[]} Metadata of every stored recording, latest per slot first, then the archived ones.
      */
     list() {
         if (!this.dir) return [];
-        return SLOTS.map((slot) => ({ slot, meta: this.readMeta(slot) }))
-            .filter((entry) => entry.meta && fs.existsSync(this.recordingPath(entry.slot)))
-            .map((entry) => ({ ...entry.meta, slot: entry.slot }));
+        return this.ids().filter((id) => this.has(id)).map((id) => ({ ...this.readMeta(id), id }));
+    }
+
+    /**
+     * @description Marks a recording as kept (exempt from replacement by newer sessions) or not. A kept
+     * latest recording is archived when a newer session of its type is saved. Unkeeping an archived
+     * recording deletes it, since it is no longer the latest of anything.
+     * @param {string} id - Recording id.
+     * @param {boolean} keep - Whether to keep it.
+     */
+    setKeep(id, keep) {
+        if (!this.has(id)) return false;
+        if (!keep && id.startsWith('archive-')) {
+            fs.unlinkSync(this.recordingPath(id));
+            fs.unlinkSync(this.metaPath(id));
+            console.log(`[Recorder] Deleted archived recording ${id}`);
+            return true;
+        }
+        fs.writeFileSync(this.metaPath(id), JSON.stringify({ ...this.readMeta(id), keep: !!keep }));
+        return true;
     }
 
     /**
@@ -256,6 +299,20 @@ class Recorder {
         const meta = { ...header, ...stats, partial: stats.firstLap !== null && stats.firstLap > 1 };
         pipeline(fs.createReadStream(pending), zlib.createGzip(), fs.createWriteStream(tmp))
             .then(() => {
+                // Read again: the user may have toggled "keep" while the recording was being compressed.
+                const previous = this.readMeta(slot);
+                if (previous && previous.keep) {
+                    if (previous.key === header.key) {
+                        // A fuller copy of the same session replaces the kept one and stays kept.
+                        meta.keep = true;
+                    } else if (fs.existsSync(this.recordingPath(slot))) {
+                        // A newer session of this type: the kept recording moves aside instead of being overwritten.
+                        const archived = this.archiveId(previous);
+                        fs.renameSync(this.recordingPath(slot), this.recordingPath(archived));
+                        fs.writeFileSync(this.metaPath(archived), JSON.stringify({ ...previous, keep: true }));
+                        console.log(`[Recorder] Kept previous ${slot} recording as ${archived}`);
+                    }
+                }
                 fs.renameSync(tmp, this.recordingPath(slot));
                 fs.writeFileSync(this.metaPath(slot), JSON.stringify(meta));
                 fs.unlinkSync(pending);

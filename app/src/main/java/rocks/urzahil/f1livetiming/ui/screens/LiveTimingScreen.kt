@@ -109,7 +109,6 @@ fun LiveTimingScreen(
             session = session,
             weather = weather,
             showLatestSession = showLatestSession,
-            qualifyingPart = qualifyingPart,
             onOpenWeather = onOpenWeather
         )
 
@@ -136,7 +135,7 @@ fun LiveTimingScreen(
             // Above the standings: practice and (sprint) qualifying are timed sessions, so they show
             // the session clock; races show the current lap / total laps like "LAP 17 / 44".
             if (isTimedSession(session)) {
-                session.clock?.let { SessionClockRow(clock = it) }
+                session.clock?.let { SessionClockRow(clock = it, qualifyingPart = qualifyingPart) }
             } else {
                 val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
                 val totalLaps = session.totalLaps
@@ -205,9 +204,12 @@ fun LiveTimingScreen(
     }
 }
 
-/** Centered status line above the table: a coloured dot followed by the lap count or session clock. */
+/**
+ * Centered status line above the table: a coloured dot followed by the lap count or session clock,
+ * preceded in qualifying by the running part ("Q3", "SQ2"…).
+ */
 @Composable
-private fun SessionProgressRow(text: String, dotColor: Color) {
+private fun SessionProgressRow(text: String, dotColor: Color, leadingLabel: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -215,6 +217,18 @@ private fun SessionProgressRow(text: String, dotColor: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
+        if (leadingLabel != null) {
+            Text(
+                text = leadingLabel,
+                color = F1Red,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.5.sp,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         Box(
             modifier = Modifier
                 .size(8.dp)
@@ -238,7 +252,7 @@ private fun SessionProgressRow(text: String, dotColor: Color) {
  * running, and holds (yellow dot) when it is stopped, e.g. under a red flag or between Q parts.
  */
 @Composable
-private fun SessionClockRow(clock: ParsedSessionClock) {
+private fun SessionClockRow(clock: ParsedSessionClock, qualifyingPart: String? = null) {
     val now by produceState(initialValue = System.currentTimeMillis(), clock) {
         while (clock.extrapolating) {
             value = System.currentTimeMillis()
@@ -248,7 +262,8 @@ private fun SessionClockRow(clock: ParsedSessionClock) {
     }
     SessionProgressRow(
         text = "REMAINING ${formatSessionClock(clock.remainingAt(now))}",
-        dotColor = if (clock.extrapolating) Color(0xFF2ECC71) else Color(0xFFFFD700)
+        dotColor = if (clock.extrapolating) Color(0xFF2ECC71) else Color(0xFFFFD700),
+        leadingLabel = qualifyingPart
     )
 }
 
@@ -300,7 +315,6 @@ private fun SessionHeaderCard(
     session: ParsedSession,
     weather: ParsedWeather,
     showLatestSession: Boolean = false,
-    qualifyingPart: String? = null,
     onOpenWeather: () -> Unit
 ) {
     val isDisplayActive = session.isLive || (showLatestSession && (session.meetingName.isNotBlank() || session.sessionName.isNotBlank() || session.sessionType.isNotBlank()))
@@ -344,7 +358,7 @@ private fun SessionHeaderCard(
                     ) {
                         if (isDisplayActive && session.sessionType.isNotBlank()) {
                             Text(
-                                text = session.sessionType.uppercase() + (qualifyingPart?.let { " · $it" } ?: ""),
+                                text = session.sessionType.uppercase(),
                                 color = F1Red,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold

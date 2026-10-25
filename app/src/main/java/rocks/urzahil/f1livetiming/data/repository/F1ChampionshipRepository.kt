@@ -9,6 +9,7 @@ import rocks.urzahil.f1livetiming.data.model.PracticeTimingItem
 import rocks.urzahil.f1livetiming.data.model.QualifyingResultItem
 import rocks.urzahil.f1livetiming.data.model.RaceResultItem
 import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
+import rocks.urzahil.f1livetiming.data.model.StandingsResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -122,12 +123,13 @@ class F1ChampionshipRepository {
         return driver.copy(headshotUrl = headshot)
     }
 
-    suspend fun fetchDriverStandings(): Result<Pair<String, List<DriverStandingItem>>> =
+    suspend fun fetchDriverStandings(): Result<StandingsResult<DriverStandingItem>> =
         withContext(Dispatchers.IO) {
             cancellableResult {
                 val root = service.getCurrentDriverStandings()
                 val season = root.mrData?.standingsTable?.season.orEmpty()
-                val rawList = root.mrData?.standingsTable?.standingsLists?.firstOrNull()?.driverStandings.orEmpty()
+                val standingsList = root.mrData?.standingsTable?.standingsLists?.firstOrNull()
+                val rawList = standingsList?.driverStandings.orEmpty()
 
                 // Fetch real official driver photos and colors extracted from OpenF1 feed at runtime
                 val metadata = getDriverMetadata()
@@ -137,11 +139,11 @@ class F1ChampionshipRepository {
                     item.copy(driver = enrichedDriver, headshotUrl = enrichedDriver?.headshotUrl)
                 }
 
-                Pair(season, enrichedList)
+                StandingsResult(season, enrichedList, standingsList?.round?.toIntOrNull())
             }
         }
 
-    suspend fun fetchConstructorStandings(): Result<Pair<String, List<ConstructorStandingItem>>> =
+    suspend fun fetchConstructorStandings(): Result<StandingsResult<ConstructorStandingItem>> =
         withContext(Dispatchers.IO) {
             cancellableResult {
                 // Ensure driver metadata is fetched first so constructor colors can be inferred from drivers
@@ -149,8 +151,9 @@ class F1ChampionshipRepository {
 
                 val root = service.getCurrentConstructorStandings()
                 val season = root.mrData?.standingsTable?.season.orEmpty()
-                val list = root.mrData?.standingsTable?.standingsLists?.firstOrNull()?.constructorStandings.orEmpty()
-                Pair(season, list)
+                val standingsList = root.mrData?.standingsTable?.standingsLists?.firstOrNull()
+                val list = standingsList?.constructorStandings.orEmpty()
+                StandingsResult(season, list, standingsList?.round?.toIntOrNull())
             }
         }
 

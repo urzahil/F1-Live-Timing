@@ -43,6 +43,11 @@ enum class StandingsCategory {
     CONSTRUCTORS
 }
 
+/** Pages listed on the "More tools" screen; add an entry here and a branch in MainContent to add a tool. */
+enum class MoreTool {
+    CHAMPIONSHIP_PREDICTOR
+}
+
 /** Results for the selected race weekend, one list per session type. */
 data class SessionResultsState(
     val race: List<RaceResultItem> = emptyList(),
@@ -100,6 +105,13 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private val _showSettingsDialog = MutableStateFlow(false)
     val showSettingsDialog: StateFlow<Boolean> = _showSettingsDialog.asStateFlow()
 
+    // "More tools" hub and the tool page open on top of it
+    private val _showMoreTools = MutableStateFlow(false)
+    val showMoreTools: StateFlow<Boolean> = _showMoreTools.asStateFlow()
+
+    private val _selectedMoreTool = MutableStateFlow<MoreTool?>(null)
+    val selectedMoreTool: StateFlow<MoreTool?> = _selectedMoreTool.asStateFlow()
+
     // Connection testing
     private val _pingResult = MutableStateFlow<PingResult?>(null)
     val pingResult: StateFlow<PingResult?> = _pingResult.asStateFlow()
@@ -119,6 +131,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _championshipSeason = MutableStateFlow("")
     val championshipSeason: StateFlow<String> = _championshipSeason.asStateFlow()
+
+    // Round the standings were last updated after; null before the first race of the season
+    private val _standingsRound = MutableStateFlow<Int?>(null)
+    val standingsRound: StateFlow<Int?> = _standingsRound.asStateFlow()
 
     private val _isChampionshipLoading = MutableStateFlow(false)
     val isChampionshipLoading: StateFlow<Boolean> = _isChampionshipLoading.asStateFlow()
@@ -263,6 +279,19 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _showSettingsDialog.value = visible
     }
 
+    fun setMoreToolsVisible(visible: Boolean) {
+        _showMoreTools.value = visible
+        if (!visible) _selectedMoreTool.value = null
+    }
+
+    fun openMoreTool(tool: MoreTool?) {
+        _selectedMoreTool.value = tool
+        if (tool == MoreTool.CHAMPIONSHIP_PREDICTOR) {
+            if (_driverStandings.value.isEmpty() && !_isChampionshipLoading.value) loadChampionshipData()
+            if (_calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
+        }
+    }
+
     private fun restartPolling() {
         pollingJob?.cancel()
         if (isAppVisible && _isPollingActive.value) startPolling()
@@ -320,17 +349,19 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             _championshipError.value = null
 
             val driversResult = championshipRepo.fetchDriverStandings()
-            driversResult.onSuccess { (season, list) ->
+            driversResult.onSuccess { (season, list, round) ->
                 _championshipSeason.value = season
                 _driverStandings.value = list
+                _standingsRound.value = round
             }.onFailure { error ->
                 Log.w(TAG, "Driver standings request failed (${error.javaClass.simpleName})")
                 _championshipError.value = "Unable to load driver standings. Please try again."
             }
 
             val constructorsResult = championshipRepo.fetchConstructorStandings()
-            constructorsResult.onSuccess { (season, list) ->
+            constructorsResult.onSuccess { (season, list, round) ->
                 if (_championshipSeason.value.isBlank()) _championshipSeason.value = season
+                if (_standingsRound.value == null) _standingsRound.value = round
                 _constructorStandings.value = list
             }.onFailure { error ->
                 Log.w(TAG, "Constructor standings request failed (${error.javaClass.simpleName})")

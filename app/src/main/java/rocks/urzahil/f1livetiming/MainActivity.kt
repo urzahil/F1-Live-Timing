@@ -148,6 +148,7 @@ fun MainContent(viewModel: F1ViewModel) {
     val showMoreTools by viewModel.showMoreTools.collectAsStateWithLifecycle()
     val selectedMoreTool by viewModel.selectedMoreTool.collectAsStateWithLifecycle()
     val fiaDocuments by viewModel.fiaDocuments.collectAsStateWithLifecycle()
+    val fiaUpcomingRace by viewModel.fiaUpcomingRace.collectAsStateWithLifecycle()
     var overflowMenuOpen by remember { mutableStateOf(false) }
 
     // "More tools" pages cover the whole screen; back returns from a tool to the hub, then to the tabs
@@ -179,6 +180,7 @@ fun MainContent(viewModel: F1ViewModel) {
                 )
                 MoreTool.FIA_DOCUMENTS -> FiaDocumentsScreen(
                     races = calendarRaces,
+                    upcomingRace = fiaUpcomingRace,
                     isCalendarLoading = isCalendarLoading,
                     calendarError = calendarError,
                     onRetryCalendar = { viewModel.loadCalendarData() },

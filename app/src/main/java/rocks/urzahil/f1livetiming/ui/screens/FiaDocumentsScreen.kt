@@ -66,12 +66,13 @@ internal fun FiaDocumentsState.fiaDocumentsTitle(): String? =
     document?.title?.takeIf { it.isNotBlank() } ?: race?.raceName?.takeIf { it.isNotBlank() }
 
 /**
- * "FIA documents" tool. Shows the season's races, then the documents of the selected race, then the
+ * "FIA Documents" tool. Shows the season's races, then the documents of the selected race, then the
  * selected document in a PDF viewer; which level is showing follows [state].
  */
 @Composable
 fun FiaDocumentsScreen(
     races: List<SeasonRaceItem>,
+    upcomingRace: SeasonRaceItem?,
     isCalendarLoading: Boolean,
     calendarError: String?,
     onRetryCalendar: () -> Unit,
@@ -93,6 +94,7 @@ fun FiaDocumentsScreen(
             state.race != null -> DocumentList(state = state, onRetry = onRetryDocuments, onOpen = onOpenDocument)
             else -> RaceList(
                 races = races,
+                upcomingRace = upcomingRace,
                 isLoading = isCalendarLoading,
                 error = calendarError,
                 onRetry = onRetryCalendar,
@@ -105,17 +107,22 @@ fun FiaDocumentsScreen(
 @Composable
 private fun RaceList(
     races: List<SeasonRaceItem>,
+    upcomingRace: SeasonRaceItem?,
     isLoading: Boolean,
     error: String?,
     onRetry: () -> Unit,
     onSelect: (SeasonRaceItem) -> Unit
 ) {
-    val listed = remember(races) { FiaDocumentRaces.listed(races, System.currentTimeMillis()) }
+    // distinctBy: the upcoming race also counts as started once its weekend begins while the tool is open
+    val listed = remember(races, upcomingRace) {
+        (listOfNotNull(upcomingRace) + FiaDocumentRaces.started(races, System.currentTimeMillis()))
+            .distinctBy { it.round }
+    }
     if (listed.isEmpty()) {
         when {
             isLoading -> Loading()
             error != null -> Message(title = "Unable to load the races", message = error, onRetry = onRetry)
-            else -> Message(title = "No races yet", message = "Documents appear here once the season's first weekend gets close.")
+            else -> Message(title = "No races yet", message = "Documents appear here once the FIA publishes the first ones of the season.")
         }
         return
     }

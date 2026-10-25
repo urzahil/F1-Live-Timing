@@ -1,6 +1,7 @@
 package rocks.urzahil.f1livetiming
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
 import rocks.urzahil.f1livetiming.data.model.SessionSchedule
@@ -33,26 +34,34 @@ class FiaDocumentRacesTest {
 
     @Test
     fun listsStartedWeekendsMostRecentFirst() {
-        val listed = FiaDocumentRaces.listed(season, millis("2026-03-16T12:00:00"))
-        assertEquals(listOf("2", "1"), listed.map { it.round })
+        val started = FiaDocumentRaces.started(season, millis("2026-03-16T12:00:00"))
+        assertEquals(listOf("2", "1"), started.map { it.round })
     }
 
     @Test
-    fun includesTheNextWeekendOnceItIsWithinAWeek() {
-        val listed = FiaDocumentRaces.listed(season, millis("2026-03-21T12:00:00"))
-        assertEquals(listOf("3", "2", "1"), listed.map { it.round })
+    fun aWeekendCountsAsStartedFromFirstPractice() {
+        assertEquals(listOf("1"), FiaDocumentRaces.started(season, millis("2026-03-06T17:30:00")).map { it.round })
+        assertEquals(emptyList<String>(), FiaDocumentRaces.started(season, millis("2026-03-06T17:29:00")).map { it.round })
+    }
+
+    @Test
+    fun nextIsTheEarliestWeekendNotStartedYet() {
+        assertEquals("3", FiaDocumentRaces.next(season, millis("2026-03-16T12:00:00"))?.round)
+        assertEquals("1", FiaDocumentRaces.next(season, millis("2026-01-01T00:00:00"))?.round)
+        assertNull(FiaDocumentRaces.next(season, millis("2026-04-11T00:00:00")))
     }
 
     @Test
     fun usesTheRaceDateWhenPracticeIsMissing() {
         val races = listOf(race(1, null, "2026-03-08"))
-        assertEquals(1, FiaDocumentRaces.listed(races, millis("2026-03-02T00:00:00")).size)
-        assertEquals(0, FiaDocumentRaces.listed(races, millis("2026-02-28T00:00:00")).size)
+        assertEquals(1, FiaDocumentRaces.started(races, millis("2026-03-08T19:00:00")).size)
+        assertEquals(0, FiaDocumentRaces.started(races, millis("2026-03-08T18:59:00")).size)
     }
 
     @Test
     fun skipsRacesWithoutAParseableDate() {
         val races = listOf(SeasonRaceItem(round = "1", date = "TBC"))
-        assertEquals(0, FiaDocumentRaces.listed(races, millis("2026-12-31T00:00:00")).size)
+        assertEquals(0, FiaDocumentRaces.started(races, millis("2026-12-31T00:00:00")).size)
+        assertNull(FiaDocumentRaces.next(races, millis("2026-01-01T00:00:00")))
     }
 }

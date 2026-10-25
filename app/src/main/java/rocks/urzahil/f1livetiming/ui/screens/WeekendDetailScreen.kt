@@ -397,6 +397,8 @@ internal fun SessionNotRunView(
     }
 
     val (localDate, localTime) = formatUtcToLocal(sessionSchedule.first, sessionSchedule.second)
+    // A session that has started but has no results yet is waiting on the results provider, not "not completed".
+    val hasStarted = isSessionInPast(sessionSchedule.first, sessionSchedule.second)
 
     Box(
         modifier = Modifier
@@ -428,7 +430,7 @@ internal fun SessionNotRunView(
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "$sessionTitle Not Yet Completed".uppercase(),
+                text = (if (hasStarted) "Results not available yet" else "$sessionTitle Not Yet Completed").uppercase(),
                 color = F1TextPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -437,7 +439,7 @@ internal fun SessionNotRunView(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (!isSessionInPast(sessionSchedule.first, sessionSchedule.second)) {
+            if (!hasStarted) {
                 Text(
                     text = "Scheduled for: $localDate · $localTime",
                     color = ColorxFFFFD700,
@@ -450,7 +452,11 @@ internal fun SessionNotRunView(
             }
 
             Text(
-                text = "Official FIA classification and telemetry will be available here immediately after the session concludes.",
+                text = if (hasStarted) {
+                    "The official classification will appear here as soon as it is published."
+                } else {
+                    "Official FIA classification and telemetry will be available here immediately after the session concludes."
+                },
                 color = F1TextSecondary,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,

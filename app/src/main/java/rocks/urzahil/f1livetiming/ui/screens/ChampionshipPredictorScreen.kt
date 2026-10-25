@@ -381,14 +381,16 @@ private fun ExplanationCard() {
                 "they can still finish on, winning every remaining Grand Prix (25 pts) and sprint (8 pts); " +
                 "for teams a one-two (43 and 15 pts). The small grey number is that maximum.",
             color = F1TextSecondary,
-            fontSize = 12.sp
+            fontSize = 12.sp,
+            lineHeight = 17.sp
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "The gold dashed line is the leader's points. A bar that still reaches the line is in the " +
                 "title fight; one that falls short is mathematically out and shown faded.",
             color = F1TextSecondary,
-            fontSize = 12.sp
+            fontSize = 12.sp,
+            lineHeight = 17.sp
         )
     }
 }

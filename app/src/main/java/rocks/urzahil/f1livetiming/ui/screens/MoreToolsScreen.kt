@@ -121,7 +121,8 @@ private fun MoreToolCard(tool: MoreTool, onClick: () -> Unit) {
             Text(
                 text = info.description,
                 color = F1TextSecondary,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                lineHeight = 16.sp
             )
         }
         Icon(

@@ -326,9 +326,12 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     fun openMoreTool(tool: MoreTool?) {
         _selectedMoreTool.value = tool
         if (tool == MoreTool.CHAMPIONSHIP_PREDICTOR) {
+            // The predictor counts remaining races from both, so refresh both on every visit.
             loadChampionshipData()
+            loadCalendarData()
+        } else if (tool != null && _calendarRaces.value.isEmpty()) {
+            loadCalendarData()
         }
-        if (tool != null && _calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
         // The FIA Documents tool always opens on its race list
         selectFiaDocumentsRace(null)
         if (tool == MoreTool.FIA_DOCUMENTS) checkFiaUpcomingRace()

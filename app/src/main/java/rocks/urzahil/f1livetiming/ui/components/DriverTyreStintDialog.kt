@@ -246,7 +246,7 @@ fun DriverTyreStintDialog(
                             )
                         }
                         Text(
-                            text = "${driver.currentCompoundAge} LAPS COMPLETED",
+                            text = "${driver.currentCompoundAge} LAPS",
                             color = F1TextSecondary,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace

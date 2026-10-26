@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
 import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 import rocks.urzahil.f1livetiming.data.repository.ParsedSession
 import rocks.urzahil.f1livetiming.data.repository.ParsedSessionClock
 import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
@@ -79,6 +80,7 @@ fun LiveTimingScreen(
     weather: ParsedWeather,
     liveTimings: List<ParsedDriverTiming>,
     raceControl: List<ParsedRaceControlMessage> = emptyList(),
+    trackStatus: TrackStatus = TrackStatus.CLEAR,
     isPolling: Boolean,
     backendUrl: String,
     liveError: String?,
@@ -109,6 +111,7 @@ fun LiveTimingScreen(
             session = session,
             weather = weather,
             showLatestSession = showLatestSession,
+            trackStatus = trackStatus,
             onOpenWeather = onOpenWeather
         )
 
@@ -316,6 +319,7 @@ private fun SessionHeaderCard(
     session: ParsedSession,
     weather: ParsedWeather,
     showLatestSession: Boolean = false,
+    trackStatus: TrackStatus = TrackStatus.CLEAR,
     onOpenWeather: () -> Unit
 ) {
     val isDisplayActive = session.isLive || (showLatestSession && (session.meetingName.isNotBlank() || session.sessionName.isNotBlank() || session.sessionType.isNotBlank()))
@@ -367,6 +371,12 @@ private fun SessionHeaderCard(
                             Spacer(modifier = Modifier.width(8.dp))
                         }
                         val statusString = when {
+                            // A safety car, VSC or red flag replaces the plain "STARTED" while it lasts.
+                            session.isLive && trackStatus != TrackStatus.CLEAR -> when (trackStatus) {
+                                TrackStatus.SAFETY_CAR -> "SAFETY CAR"
+                                TrackStatus.VIRTUAL_SAFETY_CAR -> "VSC"
+                                else -> "RED FLAG"
+                            }
                             session.isLive -> session.status
                             isDisplayActive -> if (session.status.isNotBlank()) session.status else "LATEST ARCHIVE"
                             else -> "NO ACTIVE SESSION"

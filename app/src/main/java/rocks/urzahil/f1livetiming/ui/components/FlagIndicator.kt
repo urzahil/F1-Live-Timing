@@ -38,7 +38,7 @@ fun FlagIndicator(
     val (flagColor, label) = when {
         upper.contains("RED") -> Pair(FlagRed, "RED FLAG")
         upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SC")
-        upper.contains("SC") || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
+        upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
         upper.contains("YELLOW") -> Pair(FlagYellow, "YELLOW FLAG")
         upper.contains("RACING") || upper == "RACE" || upper.contains("ONGOING") -> Pair(FlagGreen, "RACING")
         upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "SESSION LIVE")

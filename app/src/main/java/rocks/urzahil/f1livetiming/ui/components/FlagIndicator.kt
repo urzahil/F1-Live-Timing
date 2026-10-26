@@ -38,7 +38,7 @@ fun FlagIndicator(
     val upper = statusText.uppercase()
     val (flagColor, label) = when {
         upper.contains("RED") -> Pair(FlagRed, "RED FLAG")
-        upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SC")
+        upper.contains("VIRTUAL") || upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SAFETY CAR")
         upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
         upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "SESSION LIVE")
         upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(Color(0xFF8E9BAE), "SESSION FINISHED")

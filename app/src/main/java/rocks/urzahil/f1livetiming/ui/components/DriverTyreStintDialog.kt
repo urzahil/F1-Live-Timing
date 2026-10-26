@@ -216,7 +216,7 @@ fun DriverTyreStintDialog(
                                     )
                                 }
                                 Text(
-                                    text = "${stint.totalLaps} LAPS",
+                                    text = lapsLabel(stint.totalLaps),
                                     color = Color(0xFFC0CAD6),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
@@ -246,7 +246,7 @@ fun DriverTyreStintDialog(
                             )
                         }
                         Text(
-                            text = "${driver.currentCompoundAge} LAPS",
+                            text = lapsLabel(driver.currentCompoundAge),
                             color = F1TextSecondary,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace
@@ -289,3 +289,5 @@ private fun SectorPill(label: String, value: String) {
         )
     }
 }
+
+private fun lapsLabel(laps: Int): String = if (laps == 1) "1 LAP" else "$laps LAPS"

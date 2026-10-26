@@ -423,7 +423,8 @@ fun MainContent(viewModel: F1ViewModel) {
                         practiceTimings = sessionResults.practice,
                         isResultsLoading = isSessionResultsLoading,
                         resultsError = sessionResultsError,
-                        isLoading = isCalendarLoading,
+                        // Only block the list for the first load; a refresh keeps the current calendar visible.
+                        isLoading = isCalendarLoading && calendarRaces.isEmpty(),
                         error = calendarError,
                         onSelectRace = { race -> viewModel.selectCalendarRace(race) },
                         onSelectSession = { type -> viewModel.selectWeekendSession(type) },

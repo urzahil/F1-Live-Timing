@@ -185,6 +185,7 @@ fun LiveTimingScreen(
                         driver = driver,
                         isFastestLap = driver.isOverallBestLap,
                         flashLastLap = isTimedSession(session),
+                        flashLeaderLap = !isTimedSession(session),
                         onClick = { onSelectDriver(driver) }
                     )
                 }
@@ -451,6 +452,7 @@ private fun DriverTimingRow(
     driver: ParsedDriverTiming,
     isFastestLap: Boolean,
     flashLastLap: Boolean,
+    flashLeaderLap: Boolean,
     onClick: () -> Unit
 ) {
     val teamColor = runCatching {
@@ -607,17 +609,38 @@ private fun DriverTimingRow(
         }
         }
 
-        // Gap to Leader
-        Text(
-            text = driver.gapToLeader,
-            color = if (driver.gapToLeader == "LEADER" || driver.position == "1") Color(0xFFFFD700) else F1TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.Monospace,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            modifier = Modifier.weight(1.1f)
-        )
+        // Gap to Leader. In a race the leader's cell shows the lap number: flash it when it changes. As with
+        // the last lap, the first value a row sees does not flash, and neither does a change of leader
+        // (the new leader's cell switches from a gap to a lap number, which is not a new lap).
+        val isLeader = driver.position == "1"
+        val gapFlash = remember { Animatable(0f) }
+        if (flashLeaderLap) {
+            val previous = remember { arrayOf<String?>(null) }
+            LaunchedEffect(driver.gapToLeader, isLeader) {
+                val before = previous[0]
+                previous[0] = if (isLeader) driver.gapToLeader else null
+                if (isLeader && before != null && before != driver.gapToLeader) {
+                    gapFlash.snapTo(1f)
+                    gapFlash.animateTo(0f, tween(durationMillis = 1500))
+                }
+            }
+        }
+
+        Box(modifier = Modifier.weight(1.1f), contentAlignment = Alignment.CenterEnd) {
+            Text(
+                text = driver.gapToLeader,
+                color = if (driver.gapToLeader == "LEADER" || isLeader) Color(0xFFFFD700) else F1TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.background(
+                    LastLapFlashColor.copy(alpha = 0.45f * gapFlash.value),
+                    RoundedCornerShape(3.dp)
+                )
+            )
+        }
     }
 }
 

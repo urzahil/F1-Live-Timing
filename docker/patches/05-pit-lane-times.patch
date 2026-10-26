@@ -1,0 +1,100 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 87e6a3f..a906d69 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -27,7 +27,8 @@ const SUBSCRIBE_CHANNELS = [
+     'RaceControlMessages',
+     'LapCount',
+     'TeamRadio',
+-    'ExtrapolatedClock'
++    'ExtrapolatedClock',
++    'PitLaneTimeCollection'
+ ];
+ 
+ class F1LiveClient {
+@@ -62,6 +63,7 @@ class F1LiveClient {
+         this.raceControl = [];
+         this.teamRadio = [];
+         this.extrapolatedClock = {};
++        this.pitLaneTimes = {};
+     }
+ 
+     /**
+@@ -282,6 +284,7 @@ class F1LiveClient {
+         if (result.LapCount) this.routeData('LapCount', result.LapCount);
+         if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
+         if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
++        if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
+     }
+ 
+     /**
+@@ -354,6 +357,13 @@ class F1LiveClient {
+                 deepMerge(this.extrapolatedClock, data);
+                 this.broadcast({ type: 'ExtrapolatedClock', data: this.extrapolatedClock });
+                 break;
++            case 'PitLaneTimeCollection':
++                // { PitTimes: { "<racing number>": { ... } } } — pit lane durations as the timing system
++                // publishes them, merged per driver. "_kf" only marks a keyframe, so it is not kept.
++                deepMerge(this.pitLaneTimes, data);
++                delete this.pitLaneTimes._kf;
++                this.broadcast({ type: 'PitLaneTimeCollection', data: this.pitLaneTimes });
++                break;
+         }
+     }
+ 
+@@ -394,6 +404,10 @@ class F1LiveClient {
+         return this.extrapolatedClock;
+     }
+ 
++    getPitLaneTimes() {
++        return this.pitLaneTimes;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index 41aa379..390aae8 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -93,6 +93,20 @@ function createSessionRouter(f1Client) {
+     router.get('/radio', getRadioHandler);
+     router.get('/team-radio', getRadioHandler);
+ 
++    /**
++     * GET /api/pitstops
++     * Retrieves pit lane times per driver (PitLaneTimeCollection channel), keyed by racing number.
++     */
++    router.get('/pitstops', (req, res) => {
++        try {
++            const pitLaneTimes = f1Client.getPitLaneTimes() || {};
++            res.status(200).json({ PitTimes: pitLaneTimes.PitTimes || {} });
++        } catch (error) {
++            console.error('[API Error] Failed to retrieve pit lane times:', error);
++            res.status(500).json({ error: 'Internal server error while querying PitLaneTimeCollection.' });
++        }
++    });
++
+     return router;
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index 34f46b8..bc86dfb 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -87,6 +87,7 @@ app.use((req, res) => {
+             '/api/weather',
+             '/api/race-control',
+             '/api/radio',
++            '/api/pitstops',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -110,6 +111,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/weather`);
+     console.log(`    - GET http://localhost:${PORT}/api/race-control  (alias: /api/flags)`);
+     console.log(`    - GET http://localhost:${PORT}/api/radio         (alias: /api/team-radio)`);
++    console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

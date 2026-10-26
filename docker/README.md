@@ -36,6 +36,7 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
    - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
 4. **`04-fia-documents.patch`** mounts `GET /api/documents`, which lists the FIA decision documents of a grand prix (the code is in [`docker/fia-docs/`](fia-docs/)). See [FIA Documents](#fia-documents) below.
+5. **`05-pit-lane-times.patch`** subscribes to F1's `PitLaneTimeCollection` channel and returns it from `GET /api/pitstops` as `{"PitTimes": {"<racing number>": {...}}}`. The entries are passed through exactly as the feed sends them and the channel is empty outside a session, so check the payload during a live session. The channel is also kept in recordings made after this patch, so it can be replayed.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -130,4 +131,5 @@ A round with no documents returns an empty list. A missing or non-numeric `year`
 *   `GET /api/weather`: Real-time track weather (air temp, track temp, humidity, pressure, wind speed, rain sensor).
 *   `GET /api/race-control`: Official FIA track status flags (GREEN, YELLOW, RED, SC, VSC).
 *   `GET /api/radio`: Team radio telemetry broadcasts.
+*   `GET /api/pitstops`: Pit lane times per driver (`PitTimes`, keyed by racing number), empty until a car pits.
 *   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).

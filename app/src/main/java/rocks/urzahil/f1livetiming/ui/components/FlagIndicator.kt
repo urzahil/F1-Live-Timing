@@ -40,10 +40,10 @@ fun FlagIndicator(
         upper.contains("RED") -> Pair(FlagRed, "RED FLAG")
         upper.contains("VIRTUAL") || upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SAFETY CAR")
         upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
-        upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "SESSION LIVE")
-        upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(Color(0xFF8E9BAE), "SESSION FINISHED")
-        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(F1TextMuted, "NO LIVE SESSION")
-        else -> Pair(F1TextMuted, upper.ifBlank { "NO LIVE SESSION" })
+        upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "GREEN FLAG")
+        upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(Color(0xFF8E9BAE), "SESSION ENDED")
+        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(F1TextMuted, "SESSION STARTED")
+        else -> Pair(F1TextMuted, upper.ifBlank { "SESSION STARTED" })
     }
 
     // Only red flag and safety car states pulse.

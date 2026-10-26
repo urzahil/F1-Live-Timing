@@ -243,7 +243,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _selectedTab.value = tab
         if (tab == F1Tab.STANDINGS) {
             loadChampionshipData()
-        } else if (tab == F1Tab.CALENDAR && _calendarRaces.value.isEmpty()) {
+        } else if (tab == F1Tab.CALENDAR) {
             loadCalendarData()
         }
     }
@@ -529,9 +529,13 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Fetches the season calendar. Called on start and on every visit to the Calendar tab; a load
+     * already in flight is not duplicated, and the list on screen stays in place while it runs.
+     */
     fun loadCalendarData() {
+        if (!_isCalendarLoading.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            _isCalendarLoading.value = true
             _calendarError.value = null
 
             val result = championshipRepo.fetchCurrentCalendar()

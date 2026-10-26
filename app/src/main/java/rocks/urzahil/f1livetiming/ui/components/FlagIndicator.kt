@@ -27,23 +27,23 @@ import androidx.compose.ui.unit.sp
 import rocks.urzahil.f1livetiming.ui.theme.FlagGreen
 import rocks.urzahil.f1livetiming.ui.theme.FlagRed
 import rocks.urzahil.f1livetiming.ui.theme.FlagSafetyCar
-import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 
 @Composable
 fun FlagIndicator(
     statusText: String,
     modifier: Modifier = Modifier
 ) {
-    // Orange is reserved for safety car alerts; a session that is not running is neutral grey.
+    // Orange is reserved for safety car alerts; a session that has not started or has ended is light grey.
     val upper = statusText.uppercase()
+    val inactiveGrey = Color(0xFF8E9BAE)
     val (flagColor, label) = when {
         upper.contains("RED") -> Pair(FlagRed, "RED FLAG")
         upper.contains("VIRTUAL") || upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SAFETY CAR")
         upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
         upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "GREEN FLAG")
-        upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(Color(0xFF8E9BAE), "SESSION ENDED")
-        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(F1TextMuted, "SESSION STARTED")
-        else -> Pair(F1TextMuted, upper.ifBlank { "SESSION STARTED" })
+        upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(inactiveGrey, "SESSION ENDED")
+        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(inactiveGrey, "SESSION STARTED")
+        else -> Pair(inactiveGrey, upper.ifBlank { "SESSION STARTED" })
     }
 
     // Only red flag and safety car states pulse.

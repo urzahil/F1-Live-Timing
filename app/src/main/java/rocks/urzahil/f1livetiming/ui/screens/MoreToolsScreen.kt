@@ -74,7 +74,7 @@ fun MoreToolsScreen(
     onOpenTool: (MoreTool) -> Unit,
     onBack: () -> Unit
 ) {
-    ToolPageScaffold(title = "More tools", onBack = onBack) { contentPadding ->
+    ToolPageScaffold(title = "More Tools", onBack = onBack) { contentPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

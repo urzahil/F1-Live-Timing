@@ -2,6 +2,9 @@ package rocks.urzahil.f1livetiming.data.model
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Data models for Ergast/Jolpica public F1 API (Season Championship & Calendar)
@@ -47,8 +50,7 @@ data class DriverStandingItem(
     @Json(name = "points") val points: String? = null,
     @Json(name = "wins") val wins: String? = null,
     @Json(name = "Driver") val driver: F1Driver? = null,
-    @Json(name = "Constructors") val constructors: List<F1Constructor>? = null,
-    @Json(name = "headshotUrl") val headshotUrl: String? = null
+    @Json(name = "Constructors") val constructors: List<F1Constructor>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -246,23 +248,18 @@ data class PracticeTimingItem(
 
 // --- Weekend Sessions & Structure ---
 
-enum class WeekendSessionType(
-    val title: String,
-    val shortBadge: String,
-    val isCompetitiveResult: Boolean
-) {
-    FP1("Free Practice 1", "FP1", false),
-    FP2("Free Practice 2", "FP2", false),
-    FP3("Free Practice 3", "FP3", false),
-    SPRINT_QUALIFYING("Sprint Qualifying", "SQ", false),
-    SPRINT("Sprint Race", "SPRINT", true),
-    QUALIFYING("Qualifying", "QUALIFYING", true),
-    RACE("Grand Prix Race", "RACE", true)
+enum class WeekendSessionType(val title: String, val shortBadge: String) {
+    FP1("Free Practice 1", "FP1"),
+    FP2("Free Practice 2", "FP2"),
+    FP3("Free Practice 3", "FP3"),
+    SPRINT_QUALIFYING("Sprint Qualifying", "SQ"),
+    SPRINT("Sprint Race", "SPRINT"),
+    QUALIFYING("Qualifying", "QUAL"),
+    RACE("Grand Prix Race", "RACE")
 }
 
 data class WeekendSessionInfo(
     val type: WeekendSessionType,
-    val name: String,
     val date: String?,
     val time: String?
 )
@@ -271,32 +268,50 @@ fun SeasonRaceItem.getAllSessions(): List<WeekendSessionInfo> {
     val list = mutableListOf<WeekendSessionInfo>()
 
     firstPractice?.let {
-        list.add(WeekendSessionInfo(WeekendSessionType.FP1, "Free Practice 1", it.date, it.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.FP1, it.date, it.time))
     }
 
     val sq = sprintQualifying ?: sprintShootout
     if (sq != null) {
-        list.add(WeekendSessionInfo(WeekendSessionType.SPRINT_QUALIFYING, "Sprint Qualifying", sq.date, sq.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.SPRINT_QUALIFYING, sq.date, sq.time))
     } else if (secondPractice != null) {
-        list.add(WeekendSessionInfo(WeekendSessionType.FP2, "Free Practice 2", secondPractice.date, secondPractice.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.FP2, secondPractice.date, secondPractice.time))
     }
 
     sprint?.let {
-        list.add(WeekendSessionInfo(WeekendSessionType.SPRINT, "Sprint Race", it.date, it.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.SPRINT, it.date, it.time))
     }
 
     if (thirdPractice != null && sprint == null) {
-        list.add(WeekendSessionInfo(WeekendSessionType.FP3, "Free Practice 3", thirdPractice.date, thirdPractice.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.FP3, thirdPractice.date, thirdPractice.time))
     }
 
     qualifying?.let {
-        list.add(WeekendSessionInfo(WeekendSessionType.QUALIFYING, "Qualifying", it.date, it.time))
+        list.add(WeekendSessionInfo(WeekendSessionType.QUALIFYING, it.date, it.time))
     }
 
-    list.add(WeekendSessionInfo(WeekendSessionType.RACE, raceName ?: "Grand Prix", date, time))
+    list.add(WeekendSessionInfo(WeekendSessionType.RACE, date, time))
 
     return list.sortedWith(
         compareBy<WeekendSessionInfo> { it.date.orEmpty() }
             .thenBy { it.time.orEmpty() }
     )
+}
+
+/**
+ * Epoch millis of a calendar entry: [date] such as "2026-03-08" and [time] such as "04:00:00Z" or "04:00",
+ * both UTC. [defaultTime] stands in for a missing time. Null when the date is missing or unparseable.
+ */
+internal fun scheduleUtcMillis(date: String?, time: String?, defaultTime: String = "00:00:00"): Long? {
+    if (date.isNullOrBlank()) return null
+    val cleanTime = time?.replace("Z", "")?.trim().takeUnless { it.isNullOrBlank() }
+        ?.let { if (it.length == 5) "$it:00" else it } ?: defaultTime
+    return try {
+        // A fresh formatter per call: SimpleDateFormat is not thread-safe.
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.parse("${date.trim()}T$cleanTime")?.time
+    } catch (_: Exception) {
+        null
+    }
 }

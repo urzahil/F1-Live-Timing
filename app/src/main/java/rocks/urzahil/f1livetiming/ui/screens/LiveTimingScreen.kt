@@ -24,8 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsMotorsports
@@ -34,8 +32,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,6 +67,7 @@ import rocks.urzahil.f1livetiming.ui.theme.F1Red
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
 import rocks.urzahil.f1livetiming.ui.theme.F1TextSecondary
+import rocks.urzahil.f1livetiming.ui.theme.TeamColors
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -81,12 +78,9 @@ fun LiveTimingScreen(
     liveTimings: List<ParsedDriverTiming>,
     raceControl: List<ParsedRaceControlMessage> = emptyList(),
     trackStatus: TrackStatus = TrackStatus.CLEAR,
-    isPolling: Boolean,
     backendUrl: String,
     liveError: String?,
-    liveDataStatus: String = "Waiting for refresh",
     showLatestSession: Boolean = false,
-    onTogglePolling: () -> Unit,
     onRefresh: () -> Unit,
     onOpenWeather: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -96,7 +90,8 @@ fun LiveTimingScreen(
     modifier: Modifier = Modifier
 ) {
     // Eliminated qualifying drivers are hidden; how many there are tells which part is running.
-    val visibleTimings = liveTimings.filterNot { it.isKnockedOut }
+    val visibleTimings = remember(liveTimings) { liveTimings.filterNot { it.isKnockedOut } }
+    val isTimed = isTimedSession(session)
     val qualifyingPart = qualifyingPartLabel(session, liveTimings.count { it.isKnockedOut })
     val hasSessionData = liveTimings.isNotEmpty() || session.sessionName.isNotBlank() || session.meetingName.isNotBlank()
     val isLiveSessionActive = (session.isLive || (showLatestSession && hasSessionData)) && liveTimings.isNotEmpty()
@@ -115,18 +110,8 @@ fun LiveTimingScreen(
             onOpenWeather = onOpenWeather
         )
 
-//        Text(
-//            text = liveDataStatus,
-//            color = if (liveDataStatus.contains("stale", ignoreCase = true) ||
-//                liveDataStatus.contains("unable", ignoreCase = true)) Color(0xFFFFB74D) else F1TextMuted,
-//            fontSize = 10.sp,
-//            fontWeight = FontWeight.Medium,
-//            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
-//        )
-
         if (!isLiveSessionActive) {
             NoActiveSessionCard(
-                session = session,
                 backendUrl = backendUrl,
                 error = liveError,
                 onOpenSettings = onOpenSettings,
@@ -137,7 +122,7 @@ fun LiveTimingScreen(
         } else {
             // Above the standings: practice and (sprint) qualifying are timed sessions, so they show
             // the session clock; races show the current lap / total laps like "LAP 17 / 44".
-            if (isTimedSession(session)) {
+            if (isTimed) {
                 session.clock?.let { SessionClockRow(clock = it, qualifyingPart = qualifyingPart) }
             } else {
                 val currentLap = if (session.currentLap > 0) session.currentLap else liveTimings.maxOfOrNull { it.totalLaps } ?: 0
@@ -169,7 +154,7 @@ fun LiveTimingScreen(
                 ?.let { it.racingNumber.ifBlank { it.driverCode } }
             // NOTE: to also scroll to the top in races and sprints, replace the line below with: CM
             // if (true) {
-            if (isTimedSession(session)) {
+            if (isTimed) {
                 LaunchedEffect(leaderId) {
                     if (leaderId != null) listState.animateScrollToItem(0)
                 }
@@ -187,8 +172,8 @@ fun LiveTimingScreen(
                     DriverTimingRow(
                         driver = driver,
                         isFastestLap = driver.isOverallBestLap,
-                        flashLastLap = isTimedSession(session),
-                        flashLeaderLap = !isTimedSession(session),
+                        flashLastLap = isTimed,
+                        flashLeaderLap = !isTimed,
                         onClick = { onSelectDriver(driver) }
                     )
                 }
@@ -465,9 +450,7 @@ private fun DriverTimingRow(
     flashLeaderLap: Boolean,
     onClick: () -> Unit
 ) {
-    val teamColor = runCatching {
-        Color(android.graphics.Color.parseColor("#${driver.teamColorHex}"))
-    }.getOrDefault(F1Red)
+    val teamColor = remember(driver.teamColorHex) { TeamColors.parseHex(driver.teamColorHex) ?: F1Red }
 
     Row(
         modifier = Modifier
@@ -656,7 +639,6 @@ private fun DriverTimingRow(
 
 @Composable
 private fun NoActiveSessionCard(
-    session: ParsedSession,
     backendUrl: String,
     error: String?,
     onOpenSettings: () -> Unit,

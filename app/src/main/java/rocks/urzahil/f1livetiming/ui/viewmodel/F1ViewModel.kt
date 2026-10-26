@@ -26,6 +26,7 @@ import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -217,9 +218,6 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private var sessionResultsJob: Job? = null
     private val refreshMutex = Mutex()
     private val manualRefreshPending = AtomicBoolean(false)
-
-    private val _liveDataStatus = MutableStateFlow("Waiting for the first refresh")
-    val liveDataStatus: StateFlow<String> = _liveDataStatus.asStateFlow()
 
     private val refreshPolicy = LiveTimingRefreshPolicy()
 
@@ -450,10 +448,10 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchLiveCycle(force: Boolean = false) {
+    private suspend fun fetchLiveCycle() {
         if (!refreshMutex.tryLock()) return
         try {
-            fetchLiveCycleLocked(force)
+            fetchLiveCycleLocked(force = false)
         } finally {
             refreshMutex.unlock()
             runPendingManualRefresh()
@@ -479,10 +477,8 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _liveTimings.value = snapshot.timings
         _raceControl.value = snapshot.raceControl
         _trackStatus.value = snapshot.trackStatus
-        _liveDataStatus.value = snapshot.status
         _liveError.value = snapshot.error
     }
-
 
     /**
      * Fetches drivers' and constructors' standings. Called on start, on every visit to the
@@ -494,7 +490,11 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _championshipError.value = null
 
-            val driversResult = championshipRepo.fetchDriverStandings()
+            // Both tables load side by side; the driver metadata they share is fetched once.
+            val driversRequest = async { championshipRepo.fetchDriverStandings() }
+            val constructorsResult = championshipRepo.fetchConstructorStandings()
+            val driversResult = driversRequest.await()
+
             driversResult.onSuccess { (season, list, round) ->
                 _championshipSeason.value = season
                 _driverStandings.value = list
@@ -504,7 +504,6 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
                 _championshipError.value = "Unable to load driver standings. Please try again."
             }
 
-            val constructorsResult = championshipRepo.fetchConstructorStandings()
             constructorsResult.onSuccess { (season, list, round) ->
                 if (_championshipSeason.value.isBlank()) _championshipSeason.value = season
                 if (_standingsRound.value == null) _standingsRound.value = round

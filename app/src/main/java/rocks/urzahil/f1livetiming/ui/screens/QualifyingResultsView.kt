@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsMotorsports
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,6 +38,7 @@ import coil.compose.AsyncImage
 import rocks.urzahil.f1livetiming.data.model.QualifyingResultItem
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
+import rocks.urzahil.f1livetiming.ui.theme.F1Gold
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1Red
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
@@ -99,7 +99,7 @@ internal fun QualifyingResultsView(
                 )
                 Text(
                     text = if (isSprintQualifying) "SQ3" else "Q3",
-                    color = ColorxFFFFD700,
+                    color = F1Gold,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -127,14 +127,14 @@ internal fun QualifyingResultsView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(F1CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, if (isPole) ColorxFFFFD700.copy(alpha = 0.5f) else F1CardBorder, RoundedCornerShape(6.dp))
+                    .border(1.dp, if (isPole) F1Gold.copy(alpha = 0.5f) else F1CardBorder, RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Pos
                 Text(
                     text = pos,
-                    color = if (isPole) ColorxFFFFD700 else F1TextPrimary,
+                    color = if (isPole) F1Gold else F1TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -224,7 +224,7 @@ internal fun QualifyingResultsView(
                 // Q3
                 Text(
                     text = item.q3.orEmpty().ifBlank { "-" },
-                    color = if (!item.q3.isNullOrBlank()) ColorxFFFFD700 else F1TextMuted,
+                    color = if (!item.q3.isNullOrBlank()) F1Gold else F1TextMuted,
                     fontSize = 10.sp,
                     fontWeight = if (!item.q3.isNullOrBlank()) FontWeight.Bold else FontWeight.Normal,
                     fontFamily = FontFamily.Monospace,

@@ -116,7 +116,6 @@ fun MainContent(viewModel: F1ViewModel) {
     val isPolling by viewModel.isPollingActive.collectAsStateWithLifecycle()
     val backendUrl by viewModel.backendUrl.collectAsStateWithLifecycle()
     val liveError by viewModel.liveError.collectAsStateWithLifecycle()
-    val liveDataStatus by viewModel.liveDataStatus.collectAsStateWithLifecycle()
 
     val selectedDriver by viewModel.selectedDriverForStints.collectAsStateWithLifecycle()
     val showWeatherDialog by viewModel.showWeatherDialog.collectAsStateWithLifecycle()
@@ -383,12 +382,9 @@ fun MainContent(viewModel: F1ViewModel) {
                         liveTimings = liveTimings,
                         raceControl = raceControl,
                         trackStatus = trackStatus,
-                        isPolling = isPolling,
                         backendUrl = backendUrl,
                         liveError = liveError,
-                        liveDataStatus = liveDataStatus,
                         showLatestSession = showLatestSession,
-                        onTogglePolling = { viewModel.togglePolling() },
                         onRefresh = { viewModel.refreshLive() },
                         onOpenWeather = { viewModel.setWeatherDialogVisible(true) },
                         onOpenSettings = { viewModel.setSettingsDialogVisible(true) },

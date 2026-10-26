@@ -57,6 +57,17 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `session names fall back when the preferred field is missing`() {
+    val repo = F1LiveRepository()
+    val session = repo.parseSessionJson(
+      """{"Session":{"Meeting":{"OfficialName":"FORMULA 1 GRAND PRIX"},"Session":{"Type":"Race"},"Name":"Race","SessionStatus":"Started"}}"""
+    )
+    assertEquals("FORMULA 1 GRAND PRIX", session.meetingName)
+    assertEquals("Race", session.sessionName)
+    assertEquals("Race", session.sessionType)
+  }
+
+  @Test
   fun `empty standings does not invent empty leader`() {
     val repo = F1LiveRepository()
     val standings = repo.parseStandingsJson("{\"Leaderboard\":[],\"Lines\":{}}", emptyMap())
@@ -272,13 +283,13 @@ class ExampleRobolectricTest {
     }
     val raw = """{"RaceControl":[$messages,{"Utc":"2026-10-23T17:50:00","Category":"Other","Message":""}]}"""
 
-    val parsed = repo.parseRaceControlJson(raw)
+    val parsed = repo.parseRaceControl(raw).messages
 
     assertEquals(listOf("MSG 7", "MSG 6", "MSG 5", "MSG 4", "MSG 3"), parsed.map { it.message })
     assertEquals("YELLOW", parsed.first().flag)
     // Times are converted from UTC to the device zone; only the shape is stable across machines.
     assert(Regex("""\d{2}:\d{2}:\d{2}""").matches(parsed.first().time))
-    assertEquals(emptyList<Any>(), repo.parseRaceControlJson("""{"RaceControl":[]}"""))
+    assertEquals(emptyList<Any>(), repo.parseRaceControl("""{"RaceControl":[]}""").messages)
   }
 
   @Test

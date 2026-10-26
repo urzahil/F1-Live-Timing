@@ -84,8 +84,7 @@ object NetworkClient {
             PingResult(
                 isSuccess = true,
                 latencyMs = latency,
-                message = "Connected: ${status.status ?: "Online"} (${status.message ?: "Ready"})",
-                statusCode = 200
+                message = "Connected: ${status.status ?: "Online"} (${status.message ?: "Ready"})"
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -95,8 +94,7 @@ object NetworkClient {
             PingResult(
                 isSuccess = false,
                 latencyMs = latency,
-                message = "Unable to connect to the backend. Check the address and try again.",
-                statusCode = -1
+                message = "Unable to connect to the backend. Check the address and try again."
             )
         }
     }
@@ -105,6 +103,5 @@ object NetworkClient {
 data class PingResult(
     val isSuccess: Boolean,
     val latencyMs: Long,
-    val message: String,
-    val statusCode: Int
+    val message: String
 )

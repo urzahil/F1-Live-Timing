@@ -245,7 +245,7 @@ private fun DriverStandingRow(
     val constructorName = item.constructors?.firstOrNull()?.name
     val teamColor = TeamColors.getTeamColor(constructorId ?: constructorName)
 
-    val headshotUrl = item.driver?.headshotUrl ?: item.headshotUrl
+    val headshotUrl = item.driver?.headshotUrl
 
     Column(
         modifier = Modifier

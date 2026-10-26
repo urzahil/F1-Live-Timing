@@ -12,6 +12,8 @@ import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
 import rocks.urzahil.f1livetiming.data.model.StandingsResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,8 +37,8 @@ class F1ChampionshipRepository {
     private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
         continuation.invokeOnCancellation { cancel() }
         enqueue(object : Callback {
-            override fun onFailure(call: Call, error: java.io.IOException) {
-                continuation.resumeWith(Result.failure(error))
+            override fun onFailure(call: Call, e: java.io.IOException) {
+                continuation.resumeWith(Result.failure(e))
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -136,7 +138,7 @@ class F1ChampionshipRepository {
 
                 val enrichedList = rawList.map { item ->
                     val enrichedDriver = enrichDriver(item.driver, item.constructors?.firstOrNull(), metadata)
-                    item.copy(driver = enrichedDriver, headshotUrl = enrichedDriver?.headshotUrl)
+                    item.copy(driver = enrichedDriver)
                 }
 
                 StandingsResult(season, enrichedList, standingsList?.round?.toIntOrNull())
@@ -386,6 +388,14 @@ class F1ChampionshipRepository {
     private suspend fun fetchSessionLaps(sessionKey: Int): JSONArray =
         fetchJsonArray("$OPENF1_BASE/laps?session_key=$sessionKey") ?: JSONArray()
 
+    /** The session's drivers and laps, requested side by side. */
+    private suspend fun fetchSessionDriversAndLaps(sessionKey: Int): Pair<Map<Int, JSONObject>, JSONArray> =
+        coroutineScope {
+            val drivers = async { fetchSessionDrivers(sessionKey) }
+            val laps = async { fetchSessionLaps(sessionKey) }
+            drivers.await() to laps.await()
+        }
+
     /** Builds the shared driver/constructor models from an OpenF1 driver entry and registers its team colour. */
     private fun openF1Entry(num: Int, d: JSONObject?): Pair<F1Driver, F1Constructor> {
         val fullName = d?.optString("full_name", "").orEmpty()
@@ -429,8 +439,7 @@ class F1ChampionshipRepository {
             val sessionKey = findOpenF1SessionKey(year, country, raceDate, sessionName)
                 ?: return@cancellableResult emptyList()
 
-            val driversMap = fetchSessionDrivers(sessionKey)
-            val lapsArray = fetchSessionLaps(sessionKey)
+            val (driversMap, lapsArray) = fetchSessionDriversAndLaps(sessionKey)
 
             val bestLapMap = mutableMapOf<Int, JSONObject>()
             val lapCountMap = mutableMapOf<Int, Int>()
@@ -492,12 +501,11 @@ class F1ChampionshipRepository {
         raceDate: String
     ): Result<List<QualifyingResultItem>> = withContext(Dispatchers.IO) {
         cancellableResult {
+            // Also tries "Sprint Shootout", the 2023 name, through alternateSessionName.
             val sessionKey = findOpenF1SessionKey(year, country, raceDate, "Sprint Qualifying")
-                ?: findOpenF1SessionKey(year, country, raceDate, "Sprint Shootout")
                 ?: return@cancellableResult emptyList()
 
-            val driversMap = fetchSessionDrivers(sessionKey)
-            val lapsArray = fetchSessionLaps(sessionKey)
+            val (driversMap, lapsArray) = fetchSessionDriversAndLaps(sessionKey)
 
             data class LapEntry(val driverNumber: Int, val lapDuration: Double, val startMillis: Long)
             val validLaps = mutableListOf<LapEntry>()

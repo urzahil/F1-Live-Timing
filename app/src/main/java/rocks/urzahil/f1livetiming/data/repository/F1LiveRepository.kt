@@ -90,7 +90,17 @@ data class ParsedRaceControlMessage(
     val time: String, // Local wall-clock time "HH:mm:ss", or "" when the feed gave none
     val category: String,
     val flag: String,
-    val message: String
+    val message: String,
+    val scope: String = ""
+)
+
+/** Track-wide condition shown in the header status pill. */
+enum class TrackStatus { CLEAR, SAFETY_CAR, VIRTUAL_SAFETY_CAR, RED_FLAG }
+
+/** Latest race control messages plus the track condition derived from the full message history. */
+data class ParsedRaceControl(
+    val messages: List<ParsedRaceControlMessage>,
+    val trackStatus: TrackStatus = TrackStatus.CLEAR
 )
 
 class F1LiveRepository {
@@ -160,17 +170,54 @@ class F1LiveRepository {
         }
     }
 
-    suspend fun fetchRaceControl(baseUrl: String): Result<List<ParsedRaceControlMessage>> = withContext(Dispatchers.IO) {
+    suspend fun fetchRaceControl(baseUrl: String): Result<ParsedRaceControl> = withContext(Dispatchers.IO) {
         requestResult("race-control") {
-            parseRaceControlJson(NetworkClient.createLiveService(baseUrl).getRaceControlRaw().string())
+            parseRaceControl(NetworkClient.createLiveService(baseUrl).getRaceControlRaw().string())
         }
+    }
+
+    fun parseRaceControl(raw: String, limit: Int = 5): ParsedRaceControl {
+        val all = parseAllRaceControlMessages(raw)
+        return ParsedRaceControl(all.takeLast(limit).reversed(), deriveTrackStatus(all))
+    }
+
+    /**
+     * Track condition after replaying [messagesOldestFirst]. The feed has no live track status
+     * here, so it is read from the messages: a safety car, VSC or red flag stays in force until
+     * a track-wide clear/green (or the VSC announces its end). Sector-scoped flags are ignored.
+     */
+    fun deriveTrackStatus(messagesOldestFirst: List<ParsedRaceControlMessage>): TrackStatus {
+        var status = TrackStatus.CLEAR
+        for (m in messagesOldestFirst) {
+            val text = m.message.uppercase()
+            val trackWide = m.scope.equals("Track", ignoreCase = true) || text.trim() == "TRACK CLEAR"
+            status = when {
+                "VIRTUAL SAFETY CAR" in text || "VSC" in text -> when {
+                    "ENDING" in text -> TrackStatus.CLEAR
+                    "DEPLOYED" in text -> TrackStatus.VIRTUAL_SAFETY_CAR
+                    else -> status
+                }
+                "SAFETY CAR" in text -> when {
+                    "DEPLOYED" in text -> TrackStatus.SAFETY_CAR
+                    "ENDING" in text -> TrackStatus.CLEAR
+                    else -> status
+                }
+                m.flag == "RED" && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
+                trackWide && (m.flag == "CLEAR" || m.flag == "GREEN") -> TrackStatus.CLEAR
+                else -> status
+            }
+        }
+        return status
     }
 
     /**
      * Returns the latest [limit] race control messages, newest first. Accepts the backend's
      * {"RaceControl": [...]} wrapper, the raw {"Messages": ...} channel shape, or a bare array.
      */
-    fun parseRaceControlJson(raw: String, limit: Int = 5): List<ParsedRaceControlMessage> {
+    fun parseRaceControlJson(raw: String, limit: Int = 5): List<ParsedRaceControlMessage> =
+        parseAllRaceControlMessages(raw).takeLast(limit).reversed()
+
+    private fun parseAllRaceControlMessages(raw: String): List<ParsedRaceControlMessage> {
         if (raw.isBlank() || raw == "{}" || raw == "[]") return emptyList()
         return try {
             val messages = if (raw.trimStart().startsWith("[")) {
@@ -187,11 +234,10 @@ class F1LiveRepository {
                         time = formatRaceControlTime(m.optString("Utc", "")),
                         category = m.optString("Category", "").trim(),
                         flag = m.optString("Flag", "").trim().uppercase(),
-                        message = text
+                        message = text,
+                        scope = m.optString("Scope", "").trim()
                     )
                 }
-                .takeLast(limit)
-                .reversed()
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse race control data (${error.javaClass.simpleName})")
             emptyList()

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import rocks.urzahil.f1livetiming.data.api.NetworkClient
 import rocks.urzahil.f1livetiming.data.repository.F1LiveRepository
+import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
 import rocks.urzahil.f1livetiming.ui.theme.TeamColors
 import org.junit.Assert.assertEquals
@@ -278,6 +279,28 @@ class ExampleRobolectricTest {
     // Times are converted from UTC to the device zone; only the shape is stable across machines.
     assert(Regex("""\d{2}:\d{2}:\d{2}""").matches(parsed.first().time))
     assertEquals(emptyList<Any>(), repo.parseRaceControlJson("""{"RaceControl":[]}"""))
+  }
+
+  @Test
+  fun `track status follows safety car, VSC and red flag messages`() {
+    val repo = F1LiveRepository()
+    fun status(vararg msgs: String): TrackStatus {
+      val items = msgs.mapIndexed { i, m ->
+        val (flag, scope, text) = m.split("|")
+        """{"Utc":"2026-10-23T17:4$i:00","Category":"Other","Flag":"$flag","Scope":"$scope","Message":"$text"}"""
+      }
+      return repo.parseRaceControl("""{"RaceControl":[${items.joinToString(",")}]}""").trackStatus
+    }
+
+    assertEquals(TrackStatus.CLEAR, status())
+    assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED"))
+    assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "||SAFETY CAR IN THIS LAP"))
+    assertEquals(TrackStatus.CLEAR, status("||SAFETY CAR DEPLOYED", "||SAFETY CAR IN THIS LAP", "CLEAR|Track|TRACK CLEAR"))
+    assertEquals(TrackStatus.VIRTUAL_SAFETY_CAR, status("||VIRTUAL SAFETY CAR DEPLOYED"))
+    assertEquals(TrackStatus.CLEAR, status("||VIRTUAL SAFETY CAR DEPLOYED", "||VIRTUAL SAFETY CAR ENDING"))
+    assertEquals(TrackStatus.RED_FLAG, status("RED|Track|RED FLAG"))
+    // A sector-only clear must not end a track-wide condition.
+    assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "CLEAR|Sector|CLEAR IN TRACK SECTOR 4"))
   }
 
   @Test

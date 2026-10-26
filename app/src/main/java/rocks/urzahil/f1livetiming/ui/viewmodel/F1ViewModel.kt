@@ -20,6 +20,7 @@ import rocks.urzahil.f1livetiming.data.repository.ExpiringListCache
 import rocks.urzahil.f1livetiming.data.repository.FiaDocumentsRepository
 import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
 import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 import rocks.urzahil.f1livetiming.data.repository.ParsedSession
 import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
@@ -112,6 +113,9 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _raceControl = MutableStateFlow<List<ParsedRaceControlMessage>>(emptyList())
     val raceControl: StateFlow<List<ParsedRaceControlMessage>> = _raceControl.asStateFlow()
+
+    private val _trackStatus = MutableStateFlow(TrackStatus.CLEAR)
+    val trackStatus: StateFlow<TrackStatus> = _trackStatus.asStateFlow()
 
     private val _liveError = MutableStateFlow<String?>(null)
     val liveError: StateFlow<String?> = _liveError.asStateFlow()
@@ -468,6 +472,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _weather.value = snapshot.weather
         _liveTimings.value = snapshot.timings
         _raceControl.value = snapshot.raceControl
+        _trackStatus.value = snapshot.trackStatus
         _liveDataStatus.value = snapshot.status
         _liveError.value = snapshot.error
     }

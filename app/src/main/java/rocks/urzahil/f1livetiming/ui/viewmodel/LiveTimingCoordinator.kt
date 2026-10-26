@@ -5,12 +5,14 @@ import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
 import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
 import rocks.urzahil.f1livetiming.data.repository.ParsedSession
 import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
+import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 
 internal data class LiveTimingSnapshot(
     val session: ParsedSession = ParsedSession(),
     val weather: ParsedWeather = ParsedWeather(),
     val timings: List<ParsedDriverTiming> = emptyList(),
     val raceControl: List<ParsedRaceControlMessage> = emptyList(),
+    val trackStatus: TrackStatus = TrackStatus.CLEAR,
     val status: String = "Waiting for the first refresh",
     val error: String? = null
 )
@@ -66,7 +68,7 @@ internal class LiveTimingCoordinator(
                     lastTimingsFetchAt = 0L
                     finalTimingFetchSessionKey = null
                 }
-                if (sessionChanged) snapshot = snapshot.copy(raceControl = emptyList())
+                if (sessionChanged) snapshot = snapshot.copy(raceControl = emptyList(), trackStatus = TrackStatus.CLEAR)
                 snapshot = snapshot.copy(session = parsed)
                 lastSessionSuccessAt = now
             }
@@ -114,8 +116,8 @@ internal class LiveTimingCoordinator(
 
             // Supplementary to the leaderboard: a failed fetch keeps the last list without marking
             // the whole snapshot stale.
-            repository.fetchRaceControl(currentUrl).onSuccess { messages ->
-                snapshot = snapshot.copy(raceControl = messages)
+            repository.fetchRaceControl(currentUrl).onSuccess { result ->
+                snapshot = snapshot.copy(raceControl = result.messages, trackStatus = result.trackStatus)
             }
         }
 

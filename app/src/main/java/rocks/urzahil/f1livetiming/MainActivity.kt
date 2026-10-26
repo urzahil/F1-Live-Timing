@@ -403,7 +403,8 @@ fun MainContent(viewModel: F1ViewModel) {
                         season = championshipSeason,
                         drivers = driverStandings,
                         constructors = constructorStandings,
-                        isLoading = isChampionshipLoading,
+                        // Only block the list for the first load; a refresh keeps the current standings visible.
+                        isLoading = isChampionshipLoading && driverStandings.isEmpty() && constructorStandings.isEmpty(),
                         error = championshipError,
                         onSelectCategory = { cat -> viewModel.setStandingsCategory(cat) },
                         onRetry = { viewModel.loadChampionshipData() }

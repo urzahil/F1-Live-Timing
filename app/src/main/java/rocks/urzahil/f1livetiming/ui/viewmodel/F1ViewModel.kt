@@ -82,6 +82,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val TAG = "F1ViewModel"
+        const val STANDINGS_RELOAD_AFTER_FINISH_MS = 10 * 60 * 1000L
     }
 
     private val settingsRepo = ServerSettingsRepository(application)
@@ -240,7 +241,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(tab: F1Tab) {
         _selectedTab.value = tab
-        if (tab == F1Tab.STANDINGS && _driverStandings.value.isEmpty()) {
+        if (tab == F1Tab.STANDINGS) {
             loadChampionshipData()
         } else if (tab == F1Tab.CALENDAR && _calendarRaces.value.isEmpty()) {
             loadCalendarData()
@@ -325,7 +326,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     fun openMoreTool(tool: MoreTool?) {
         _selectedMoreTool.value = tool
         if (tool == MoreTool.CHAMPIONSHIP_PREDICTOR) {
-            if (_driverStandings.value.isEmpty() && !_isChampionshipLoading.value) loadChampionshipData()
+            loadChampionshipData()
         }
         if (tool != null && _calendarRaces.value.isEmpty() && !_isCalendarLoading.value) loadCalendarData()
         // The FIA Documents tool always opens on its race list
@@ -468,7 +469,9 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             force = force,
             showLatestSession = showLatestSession.value
         )
+        val previousSession = _session.value
         _session.value = snapshot.session
+        if (previousSession.isLive && snapshot.session.status == "SESSION FINISHED") onLiveSessionFinished()
         _weather.value = snapshot.weather
         _liveTimings.value = snapshot.timings
         _raceControl.value = snapshot.raceControl
@@ -478,9 +481,14 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
+    /**
+     * Fetches drivers' and constructors' standings. Called on start, on every visit to the
+     * Standings tab or the Predictor, and after a live session finishes. A load already in
+     * flight is not duplicated, and the lists on screen stay in place while a refresh runs.
+     */
     fun loadChampionshipData() {
+        if (!_isChampionshipLoading.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            _isChampionshipLoading.value = true
             _championshipError.value = null
 
             val driversResult = championshipRepo.fetchDriverStandings()
@@ -506,6 +514,18 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _isChampionshipLoading.value = false
+        }
+    }
+
+    /**
+     * The standings are published some time after the chequered flag, so reload right away and
+     * again later to pick up the points once the API has them.
+     */
+    private fun onLiveSessionFinished() {
+        loadChampionshipData()
+        viewModelScope.launch {
+            delay(STANDINGS_RELOAD_AFTER_FINISH_MS)
+            loadChampionshipData()
         }
     }
 

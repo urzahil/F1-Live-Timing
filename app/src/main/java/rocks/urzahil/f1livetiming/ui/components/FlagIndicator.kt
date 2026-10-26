@@ -27,28 +27,27 @@ import androidx.compose.ui.unit.sp
 import rocks.urzahil.f1livetiming.ui.theme.FlagGreen
 import rocks.urzahil.f1livetiming.ui.theme.FlagRed
 import rocks.urzahil.f1livetiming.ui.theme.FlagSafetyCar
-import rocks.urzahil.f1livetiming.ui.theme.FlagYellow
+import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 
 @Composable
 fun FlagIndicator(
     statusText: String,
     modifier: Modifier = Modifier
 ) {
+    // Orange is reserved for safety car alerts; a session that is not running is neutral grey.
     val upper = statusText.uppercase()
     val (flagColor, label) = when {
         upper.contains("RED") -> Pair(FlagRed, "RED FLAG")
         upper.contains("VSC") -> Pair(FlagSafetyCar, "VIRTUAL SC")
         upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
-        upper.contains("YELLOW") -> Pair(FlagYellow, "YELLOW FLAG")
-        upper.contains("RACING") || upper == "RACE" || upper.contains("ONGOING") -> Pair(FlagGreen, "RACING")
         upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "SESSION LIVE")
-        upper.contains("GREEN") || upper.contains("CLEAR") -> Pair(FlagGreen, "TRACK CLEAR")
         upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(Color(0xFF8E9BAE), "SESSION FINISHED")
-        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(Color(0xFFE67E22), "NO LIVE SESSION")
-        else -> Pair(Color(0xFFE67E22), upper.ifBlank { "NO LIVE SESSION" })
+        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(F1TextMuted, "NO LIVE SESSION")
+        else -> Pair(F1TextMuted, upper.ifBlank { "NO LIVE SESSION" })
     }
 
-    val isAlert = flagColor != FlagGreen && flagColor != Color(0xFF5F6C7D)
+    // Only red flag and safety car states pulse.
+    val isAlert = flagColor == FlagRed || flagColor == FlagSafetyCar
     val infiniteTransition = rememberInfiniteTransition(label = "flag_pulse")
     val alphaAnim by if (isAlert) {
         infiniteTransition.animateFloat(

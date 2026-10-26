@@ -374,7 +374,7 @@ private fun SessionHeaderCard(
                             // A safety car, VSC or red flag replaces the plain "STARTED" while it lasts.
                             session.isLive && trackStatus != TrackStatus.CLEAR -> when (trackStatus) {
                                 TrackStatus.SAFETY_CAR -> "SAFETY CAR"
-                                TrackStatus.VIRTUAL_SAFETY_CAR -> "VSC"
+                                TrackStatus.VIRTUAL_SAFETY_CAR -> "VIRTUAL SAFETY CAR"
                                 else -> "RED FLAG"
                             }
                             session.isLive -> session.status

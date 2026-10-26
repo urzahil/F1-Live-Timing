@@ -21,6 +21,8 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 04 - Mounts GET /api/documents, backed by a local cache of the FIA documents listed by api.f1cosmos.com
 #      (src/fia-docs/, copied below).
 # 05 - Subscribes to PitLaneTimeCollection and serves it from GET /api/pitstops.
+# 06 - Subscribes to TimingStats and serves it from GET /api/timing-stats (needs 05).
+# 07 - Subscribes to SessionData and serves it from GET /api/session-data (needs 06).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \

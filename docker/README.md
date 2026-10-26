@@ -37,6 +37,8 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
 4. **`04-fia-documents.patch`** mounts `GET /api/documents`, which lists the FIA decision documents of a grand prix (the code is in [`docker/fia-docs/`](fia-docs/)). See [FIA Documents](#fia-documents) below.
 5. **`05-pit-lane-times.patch`** subscribes to F1's `PitLaneTimeCollection` channel and returns it from `GET /api/pitstops` as `{"PitTimes": {"<racing number>": {...}}}`. The entries are passed through exactly as the feed sends them and the channel is empty outside a session, so check the payload during a live session. The channel is also kept in recordings made after this patch, so it can be replayed.
+6. **`06-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 05.
+7. **`07-session-data.patch`** subscribes to `SessionData` and returns it from `GET /api/session-data` as `{"SessionData": {"Series": [{"Utc", "Lap"}], ...}}`: the start time of each lap, plus the status history if the feed sends it. Applies on top of 06.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -132,4 +134,6 @@ A round with no documents returns an empty list. A missing or non-numeric `year`
 *   `GET /api/race-control`: Official FIA track status flags (GREEN, YELLOW, RED, SC, VSC).
 *   `GET /api/radio`: Team radio telemetry broadcasts.
 *   `GET /api/pitstops`: Pit lane times per driver (`PitTimes`, keyed by racing number), empty until a car pits.
+*   `GET /api/timing-stats`: Personal bests, best sectors and best speeds per driver, with rank.
+*   `GET /api/session-data`: Lap start timestamps and status history.
 *   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).

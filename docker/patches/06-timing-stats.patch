@@ -1,0 +1,97 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index a906d69..15df690 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -28,7 +28,8 @@ const SUBSCRIBE_CHANNELS = [
+     'LapCount',
+     'TeamRadio',
+     'ExtrapolatedClock',
+-    'PitLaneTimeCollection'
++    'PitLaneTimeCollection',
++    'TimingStats'
+ ];
+ 
+ class F1LiveClient {
+@@ -64,6 +65,7 @@ class F1LiveClient {
+         this.teamRadio = [];
+         this.extrapolatedClock = {};
+         this.pitLaneTimes = {};
++        this.timingStats = {};
+     }
+ 
+     /**
+@@ -285,6 +287,7 @@ class F1LiveClient {
+         if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
+         if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+         if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
++        if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
+     }
+ 
+     /**
+@@ -364,6 +367,11 @@ class F1LiveClient {
+                 delete this.pitLaneTimes._kf;
+                 this.broadcast({ type: 'PitLaneTimeCollection', data: this.pitLaneTimes });
+                 break;
++            case 'TimingStats':
++                // { Withheld, Lines: { "<racing number>": { PersonalBestLapTime, BestSectors, BestSpeeds } } } — updates only carry the changed fields.
++                deepMerge(this.timingStats, data);
++                this.broadcast({ type: 'TimingStats', data: this.timingStats });
++                break;
+         }
+     }
+ 
+@@ -408,6 +416,10 @@ class F1LiveClient {
+         return this.pitLaneTimes;
+     }
+ 
++    getTimingStats() {
++        return this.timingStats;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index 390aae8..b2f20bc 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -107,6 +107,19 @@ function createSessionRouter(f1Client) {
+         }
+     });
+ 
++    /**
++     * GET /api/timing-stats
++     * Retrieves per-driver personal bests, best sectors and best speeds with their rank (TimingStats channel).
++     */
++    router.get('/timing-stats', (req, res) => {
++        try {
++            res.status(200).json({ TimingStats: f1Client.getTimingStats() || {} });
++        } catch (error) {
++            console.error('[API Error] Failed to retrieve TimingStats:', error);
++            res.status(500).json({ error: 'Internal server error while querying TimingStats.' });
++        }
++    });
++
+     return router;
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index bc86dfb..d08d544 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -88,6 +88,7 @@ app.use((req, res) => {
+             '/api/race-control',
+             '/api/radio',
+             '/api/pitstops',
++            '/api/timing-stats',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -112,6 +113,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/race-control  (alias: /api/flags)`);
+     console.log(`    - GET http://localhost:${PORT}/api/radio         (alias: /api/team-radio)`);
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
++    console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

@@ -25,10 +25,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -156,13 +155,13 @@ private fun ConstructorStandingItem.toEntry() = StandingEntry(
 
 @Composable
 private fun CategoryTabs(category: StandingsCategory, onSelect: (StandingsCategory) -> Unit) {
-    TabRow(
+    SecondaryTabRow(
         selectedTabIndex = category.ordinal,
         containerColor = F1CardSurface,
         contentColor = F1Red,
-        indicator = { tabPositions ->
+        indicator = {
             TabRowDefaults.SecondaryIndicator(
-                Modifier.tabIndicatorOffset(tabPositions[category.ordinal]),
+                Modifier.tabIndicatorOffset(category.ordinal),
                 color = F1Red
             )
         },

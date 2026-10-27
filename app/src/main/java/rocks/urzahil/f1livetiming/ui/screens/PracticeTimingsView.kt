@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import rocks.urzahil.f1livetiming.data.model.PracticeTimingItem
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface

@@ -217,7 +217,7 @@ class F1ChampionshipRepository {
     private suspend fun fetchJsonArray(url: String): JSONArray? =
         httpClient.newCall(Request.Builder().url(url).build()).awaitResponse().use { resp ->
             if (!resp.isSuccessful) return@use null
-            val body = resp.body?.string().orEmpty().trimStart()
+            val body = resp.body.string().trimStart()
             if (body.startsWith("[")) JSONArray(body) else null
         }
 

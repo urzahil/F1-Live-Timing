@@ -6,7 +6,7 @@ plugins {
 
 android {
   namespace = "rocks.urzahil.f1livetiming"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) { minorApiLevel = 2 } }
 
   defaultConfig {
     applicationId = "rocks.urzahil.f1livetiming"
@@ -66,6 +66,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.coil.compose)
+  implementation(libs.coil.network.okhttp)
   implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)

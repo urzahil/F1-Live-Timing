@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsMotorsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -33,12 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import rocks.urzahil.f1livetiming.data.model.PracticeTimingItem
-import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
-import rocks.urzahil.f1livetiming.data.model.WeekendSessionType
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
+import rocks.urzahil.f1livetiming.ui.theme.F1Gold
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
@@ -50,11 +48,7 @@ import rocks.urzahil.f1livetiming.ui.theme.TeamColors
  * Displays individual lap times, gaps to leader, sector splits, and laps completed for FP1, FP2, and FP3.
  */
 @Composable
-internal fun PracticeTimingsView(
-    timings: List<PracticeTimingItem>,
-    sessionType: WeekendSessionType,
-    race: SeasonRaceItem
-) {
+internal fun PracticeTimingsView(timings: List<PracticeTimingItem>) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -85,7 +79,7 @@ internal fun PracticeTimingsView(
                 )
                 Text(
                     text = "TIME",
-                    color = ColorxFFFFD700,
+                    color = F1Gold,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -126,7 +120,7 @@ internal fun PracticeTimingsView(
                     .background(F1CardSurface, RoundedCornerShape(6.dp))
                     .border(
                         1.dp,
-                        if (isLeader) ColorxFFFFD700.copy(alpha = 0.5f) else F1CardBorder,
+                        if (isLeader) F1Gold.copy(alpha = 0.5f) else F1CardBorder,
                         RoundedCornerShape(6.dp)
                     )
                     .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -135,7 +129,7 @@ internal fun PracticeTimingsView(
                 // Pos
                 Text(
                     text = pos,
-                    color = if (isLeader) ColorxFFFFD700 else F1TextPrimary,
+                    color = if (isLeader) F1Gold else F1TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -198,7 +192,7 @@ internal fun PracticeTimingsView(
                 // Best Lap Time
                 Text(
                     text = item.bestLapTime.ifBlank { "--" },
-                    color = if (isLeader) ColorxFFFFD700 else F1TextPrimary,
+                    color = if (isLeader) F1Gold else F1TextPrimary,
                     fontSize = 11.sp,
                     fontWeight = if (isLeader) FontWeight.Bold else FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
@@ -212,7 +206,7 @@ internal fun PracticeTimingsView(
                 // Gap
                 Text(
                     text = item.gapToLeader.ifBlank { "--" },
-                    color = if (isLeader) ColorxFFFFD700 else F1TextSecondary,
+                    color = if (isLeader) F1Gold else F1TextSecondary,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.End,

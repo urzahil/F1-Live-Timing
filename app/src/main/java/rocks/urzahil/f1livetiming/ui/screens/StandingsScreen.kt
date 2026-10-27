@@ -25,10 +25,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,7 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import rocks.urzahil.f1livetiming.ui.components.trimToInkHeight
 import rocks.urzahil.f1livetiming.data.model.ConstructorStandingItem
 import rocks.urzahil.f1livetiming.data.model.DriverStandingItem
@@ -128,13 +127,13 @@ fun StandingsScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = category.ordinal,
                 containerColor = F1CardSurface,
                 contentColor = F1Red,
-                indicator = { tabPositions ->
+                indicator = {
                     TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[category.ordinal]),
+                        Modifier.tabIndicatorOffset(category.ordinal),
                         color = F1Red
                     )
                 },
@@ -245,7 +244,7 @@ private fun DriverStandingRow(
     val constructorName = item.constructors?.firstOrNull()?.name
     val teamColor = TeamColors.getTeamColor(constructorId ?: constructorName)
 
-    val headshotUrl = item.driver?.headshotUrl ?: item.headshotUrl
+    val headshotUrl = item.driver?.headshotUrl
 
     Column(
         modifier = Modifier

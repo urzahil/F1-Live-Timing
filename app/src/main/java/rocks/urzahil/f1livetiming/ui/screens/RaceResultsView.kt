@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsMotorsports
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
@@ -38,10 +37,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import rocks.urzahil.f1livetiming.data.model.RaceResultItem
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
+import rocks.urzahil.f1livetiming.ui.theme.F1Gold
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
@@ -91,7 +91,7 @@ internal fun RaceResultsView(
                 )
                 Text(
                     text = "PTS",
-                    color = ColorxFFFFD700,
+                    color = F1Gold,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -114,7 +114,7 @@ internal fun RaceResultsView(
             val pos = item.position.orEmpty()
             val isWinner = pos == "1"
             val badgeColor = when (pos) {
-                "1" -> ColorxFFFFD700
+                "1" -> F1Gold
                 "2" -> Color(0xFFC0C0C0)
                 "3" -> Color(0xFFCD7F32)
                 else -> if (item.status == "Finished" || item.status?.contains("Lap") == true) F1TextPrimary else F1TextMuted
@@ -141,7 +141,7 @@ internal fun RaceResultsView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(F1CardSurface, RoundedCornerShape(6.dp))
-                    .border(1.dp, if (isWinner) ColorxFFFFD700.copy(alpha = 0.5f) else F1CardBorder, RoundedCornerShape(6.dp))
+                    .border(1.dp, if (isWinner) F1Gold.copy(alpha = 0.5f) else F1CardBorder, RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -239,7 +239,7 @@ internal fun RaceResultsView(
                 // Points
                 Text(
                     text = if (pointsVal != "0" && pointsVal.isNotBlank()) pointsVal else "-",
-                    color = if (pointsVal != "0" && pointsVal.isNotBlank()) ColorxFFFFD700 else F1TextMuted,
+                    color = if (pointsVal != "0" && pointsVal.isNotBlank()) F1Gold else F1TextMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,

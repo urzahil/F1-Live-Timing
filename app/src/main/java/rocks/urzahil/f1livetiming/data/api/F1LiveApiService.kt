@@ -2,10 +2,8 @@ package rocks.urzahil.f1livetiming.data.api
 
 import rocks.urzahil.f1livetiming.data.model.FiaDocumentsResponse
 import rocks.urzahil.f1livetiming.data.model.LiveStatusResponse
-import rocks.urzahil.f1livetiming.data.model.LiveWeatherResponse
 import okhttp3.ResponseBody
 import retrofit2.http.GET
-import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -24,9 +22,6 @@ interface F1LiveApiService {
 
     @GET("api/standings")
     suspend fun getStandingsRaw(): ResponseBody
-
-    @GET("api/standings/{driverNumber}")
-    suspend fun getDriverTelemetryRaw(@Path("driverNumber") driverNumber: String): ResponseBody
 
     @GET("api/tyres")
     suspend fun getTyresRaw(): ResponseBody

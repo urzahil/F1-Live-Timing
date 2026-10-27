@@ -32,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,10 +74,10 @@ fun CalendarScreen(
     error: String?,
     onSelectRace: (SeasonRaceItem?) -> Unit,
     onSelectSession: (WeekendSessionType) -> Unit,
+    onSelectRaceSession: (SeasonRaceItem, WeekendSessionType) -> Unit,
     onRetry: () -> Unit,
     onRetryResults: () -> Unit,
     modifier: Modifier = Modifier,
-    onSelectRaceSession: ((SeasonRaceItem, WeekendSessionType) -> Unit)? = null,
     sprintQualifyingResults: List<QualifyingResultItem> = emptyList(),
     practiceTimings: List<PracticeTimingItem> = emptyList(),
     calendarListState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -109,14 +110,7 @@ fun CalendarScreen(
             isLoading = isLoading,
             error = error,
             onSelectRace = onSelectRace,
-            onSelectRaceSession = { race, type ->
-                if (onSelectRaceSession != null) {
-                    onSelectRaceSession(race, type)
-                } else {
-                    onSelectRace(race)
-                    onSelectSession(type)
-                }
-            },
+            onSelectRaceSession = onSelectRaceSession,
             onRetry = onRetry,
             listState = calendarListState,
             modifier = modifier
@@ -240,9 +234,8 @@ internal fun GrandPrixRaceCard(
     onClick: () -> Unit,
     onSelectSession: (WeekendSessionType) -> Unit
 ) {
-    val (localDate, localTime) = formatUtcToLocal(race.date, race.time)
     val isSprint = race.sprint != null || race.sprintQualifying != null
-    val sessions = race.getAllSessions()
+    val sessions = remember(race) { race.getAllSessions() }
 
     Card(
         modifier = Modifier

@@ -25,52 +25,7 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 ### More tools
 Opened from the ⋮ menu in the top bar, which also holds the backend settings.
 - Championship predictor: who can still mathematically win the drivers' and constructors' titles, based on the points left on the calendar
-
-## How it works
-
-The app combines two data sources:
-
-| Data | Source |
-| --- | --- |
-| Live timing, tyres, weather, race control | A self-hosted [`julesr0y/f1-livetiming-api`](https://github.com/julesr0y/f1-livetiming-api) backend (URL configurable in the app) |
-| Standings, calendar, session results | The public [Jolpica F1 API](https://api.jolpi.ca/ergast/f1/) (Ergast-compatible) |
-
-The live backend URL can be changed at any time from settings.
-
-### Live backend
-
-[`docker/`](docker/) builds the backend from a pinned upstream commit with local patches from [`docker/patches/`](docker/patches/).
-
-The Dockerfile also serves the upstream JSDoc site at `/docs`, which upstream advertises but never mounts.
-
-Quick start:
-
-```bash
-cd docker
-docker compose up -d --build
-curl http://localhost:3000/api/status
-```
-
-Then enter `http://<host>:3000` as the backend URL in the app. After pulling changes to `docker/`, rebuild with `docker compose up -d --build`. See [`docker/README.md`](docker/README.md) for the full setup, the endpoint list and the recording and replay API.
-
-The app still works with an unpatched backend, but without the session clock and with the stale-data and missing-tyre issues the patches fix.
-
-## Building the app
-
-Requirements: Android Studio (or JDK 17 and the Android SDK), `minSdk` 24.
-
-```bash
-./gradlew assembleDebug        # debug APK
-./gradlew testDebugUnitTest    # unit tests
-```
-
-The stack is Kotlin and Jetpack Compose, with Retrofit, OkHttp and Moshi for networking and Coil for images.
-
-### Releases
-
-The *Build F1 Live Timing Release APK* GitHub Actions workflow (run manually) runs the unit tests, builds a signed release APK and publishes it as a GitHub Release. It needs the `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` repository secrets. For a local release build, set the same values as environment variables and `KEYSTORE_PATH` if the keystore is not at `my-upload-key.jks` in the project root.
-
-## License
+- FIA Documents: review all official documents for all weekends.
 
 Released under the [GNU General Public License v3.0](LICENSE).
 

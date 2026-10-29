@@ -219,7 +219,7 @@ internal fun PracticeTimingsView(timings: List<PracticeTimingItem>) {
                 // Laps
                 Text(
                     text = if (item.lapsCompleted > 0) item.lapsCompleted.toString() else "-",
-                    color = F1TextMuted,
+                    color = F1TextSecondary,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.End,

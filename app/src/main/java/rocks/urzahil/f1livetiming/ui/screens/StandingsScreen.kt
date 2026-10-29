@@ -346,7 +346,7 @@ private fun DriverStandingRow(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "(-$diffToLeader)",
-                            color = F1TextMuted,
+                            color = F1TextSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = FontFamily.Monospace
@@ -357,7 +357,7 @@ private fun DriverStandingRow(
                 if (winsCount > 0) {
                     Text(
                         text = if (winsCount == 1) "1 win" else "$winsCount wins",
-                        color = F1TextMuted,
+                        color = F1TextSecondary,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace
                     )
@@ -457,7 +457,7 @@ private fun ConstructorStandingRow(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "(-$diffToLeader)",
-                            color = F1TextMuted,
+                            color = F1TextSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = FontFamily.Monospace
@@ -468,7 +468,7 @@ private fun ConstructorStandingRow(
                 if (winsCount > 0) {
                     Text(
                         text = if (winsCount == 1) "1 win" else "$winsCount wins",
-                        color = F1TextMuted,
+                        color = F1TextSecondary,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace
                     )

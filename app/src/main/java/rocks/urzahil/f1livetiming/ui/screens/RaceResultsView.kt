@@ -45,6 +45,7 @@ import rocks.urzahil.f1livetiming.ui.theme.F1Gold
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
+import rocks.urzahil.f1livetiming.ui.theme.F1TextSecondary
 import rocks.urzahil.f1livetiming.ui.theme.TeamColors
 
 @Composable
@@ -258,7 +259,7 @@ internal fun RaceResultsView(
                     if (gridPos > 0) {
                         Text(
                             text = "P$gridPos",
-                            color = F1TextMuted,
+                            color = F1TextSecondary,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace,
                             maxLines = 1,

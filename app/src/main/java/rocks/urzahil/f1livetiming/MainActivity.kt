@@ -249,7 +249,7 @@ private fun MainTopBar(viewModel: F1ViewModel, selectedTab: F1Tab) {
                     modifier = Modifier.background(F1CardSurface)
                 ) {
                     DropdownMenuItem(
-                        text = { Text("More tools", color = F1TextPrimary) },
+                        text = { Text("More Tools", color = F1TextPrimary) },
                         leadingIcon = { Icon(Icons.Default.Apps, contentDescription = null, tint = F1TextSecondary) },
                         onClick = {
                             overflowMenuOpen = false

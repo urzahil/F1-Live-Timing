@@ -3,6 +3,7 @@ package rocks.urzahil.f1livetiming
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import rocks.urzahil.f1livetiming.data.api.NetworkClient
+import rocks.urzahil.f1livetiming.data.repository.F1ChampionshipRepository
 import rocks.urzahil.f1livetiming.data.repository.F1LiveRepository
 import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
@@ -28,6 +29,23 @@ class ExampleRobolectricTest {
     val second = NetworkClient.createLiveService("http://example.com:3000")
     org.junit.Assert.assertSame(first, second)
     assertEquals("http://example.com:3000/", NetworkClient.normalizeBaseUrl(" HTTP://EXAMPLE.COM:3000/// "))
+  }
+
+  @Test
+  fun `stored OpenF1 driver list supplies headshots when OpenF1 is unreachable`() {
+    val file = java.io.File.createTempFile("openf1_drivers", ".json").apply { deleteOnExit() }
+    file.writeText(
+      """[{"name_acronym":"ver","driver_number":1,"last_name":"Verstappen",""" +
+        """"headshot_url":"https://media.formula1.com/ver.png","team_colour":"3671C6","team_name":"Red Bull Racing"}]"""
+    )
+    val metadata = F1ChampionshipRepository(file).loadStoredDriverMetadata()
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["VER"])
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["1"])
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["verstappen"])
+
+    file.writeText("not json")
+    assertTrue(F1ChampionshipRepository(file).loadStoredDriverMetadata().headshots.isEmpty())
+    assertTrue(F1ChampionshipRepository(null).loadStoredDriverMetadata().headshots.isEmpty())
   }
 
   @Test

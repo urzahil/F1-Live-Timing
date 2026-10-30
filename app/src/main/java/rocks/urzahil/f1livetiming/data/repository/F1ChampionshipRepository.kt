@@ -24,6 +24,7 @@ import okhttp3.Response
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -31,7 +32,11 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class F1ChampionshipRepository {
+/**
+ * [driverMetadataFile] keeps the last OpenF1 driver list that loaded, so headshots and colours still
+ * show while OpenF1 refuses unauthenticated requests (it does for the whole of a live session).
+ */
+class F1ChampionshipRepository(private val driverMetadataFile: File? = null) {
 
     /** Await OkHttp without blocking an IO thread and cancel the call with its coroutine. */
     private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
@@ -74,6 +79,9 @@ class F1ChampionshipRepository {
     @Volatile
     private var lastMetadataFailureAt = 0L
 
+    // Read from driverMetadataFile on the first failed fetch; null until then.
+    private var storedDriverMetadata: DriverMetadata? = null
+
     private val driverMetadataMutex = Mutex()
 
     private suspend fun getDriverMetadata(): DriverMetadata = driverMetadataMutex.withLock {
@@ -85,16 +93,44 @@ class F1ChampionshipRepository {
         // under the mutex) by every standings and results load.
         val now = System.currentTimeMillis()
         if (now - lastMetadataFailureAt < METADATA_RETRY_COOLDOWN_MS) {
-            return@withLock DriverMetadata(emptyMap(), emptyMap())
+            return@withLock loadStoredDriverMetadata()
         }
-        val fetched = fetchDriverMetadataFromApi()
-        if (fetched.headshots.isNotEmpty() || fetched.driverColors.isNotEmpty()) {
+        val drivers = fetchOpenF1Drivers()
+        val fetched = drivers?.let(::parseDriverMetadata)
+        if (fetched != null && (fetched.headshots.isNotEmpty() || fetched.driverColors.isNotEmpty())) {
             cachedDriverMetadata = fetched
             lastMetadataFailureAt = 0L
+            saveDriverMetadata(drivers)
+            fetched
         } else {
+            // Keep retrying OpenF1 after the cooldown, showing the last stored list meanwhile.
             lastMetadataFailureAt = now
+            loadStoredDriverMetadata()
         }
-        fetched
+    }
+
+    internal fun loadStoredDriverMetadata(): DriverMetadata {
+        storedDriverMetadata?.let { return it }
+        val stored = try {
+            driverMetadataFile?.takeIf { it.exists() }?.readText()?.let { parseDriverMetadata(JSONArray(it)) }
+        } catch (error: Exception) {
+            android.util.Log.w("F1ChampionshipRepository", "Stored driver metadata unreadable (${error.javaClass.simpleName})")
+            null
+        } ?: DriverMetadata(emptyMap(), emptyMap())
+        storedDriverMetadata = stored
+        return stored
+    }
+
+    private fun saveDriverMetadata(drivers: JSONArray) {
+        val file = driverMetadataFile ?: return
+        try {
+            // Write then rename, so a crash mid-write never leaves a truncated file behind.
+            val temp = File(file.parentFile, "${file.name}.tmp")
+            temp.writeText(drivers.toString())
+            if (!temp.renameTo(file)) temp.delete()
+        } catch (error: Exception) {
+            android.util.Log.w("F1ChampionshipRepository", "Unable to store driver metadata (${error.javaClass.simpleName})")
+        }
     }
 
     private fun enrichDriver(
@@ -221,52 +257,53 @@ class F1ChampionshipRepository {
             if (body.startsWith("[")) JSONArray(body) else null
         }
 
-    private suspend fun fetchDriverMetadataFromApi(): DriverMetadata {
+    /** OpenF1's driver list for the latest session, or null when the request fails. */
+    private suspend fun fetchOpenF1Drivers(): JSONArray? = try {
+        fetchJsonArray("$OPENF1_BASE/drivers?session_key=latest")
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        android.util.Log.w("F1ChampionshipRepository", "Driver metadata request failed (${error.javaClass.simpleName})")
+        null
+    }
+
+    private fun parseDriverMetadata(arr: JSONArray): DriverMetadata {
         val headshotsMap = mutableMapOf<String, String>()
         val driverColorsMap = mutableMapOf<String, androidx.compose.ui.graphics.Color>()
-        try {
-            val arr = fetchJsonArray("$OPENF1_BASE/drivers?session_key=latest")
-            if (arr != null) {
-                for (i in 0 until arr.length()) {
-                    val d = arr.optJSONObject(i) ?: continue
-                    val headshot = d.optString("headshot_url", "").trim()
-                    val teamColour = d.optString("team_colour", "").trim()
-                    val teamName = d.optString("team_name", "").trim()
-                    val acronym = d.optString("name_acronym", "").trim().uppercase()
-                    val driverNum = d.optString("driver_number", "").trim()
-                    val lastName = d.optString("last_name", "").trim().lowercase()
+        for (i in 0 until arr.length()) {
+            val d = arr.optJSONObject(i) ?: continue
+            val headshot = d.optString("headshot_url", "").trim()
+            val teamColour = d.optString("team_colour", "").trim()
+            val teamName = d.optString("team_name", "").trim()
+            val acronym = d.optString("name_acronym", "").trim().uppercase()
+            val driverNum = d.optString("driver_number", "").trim()
+            val lastName = d.optString("last_name", "").trim().lowercase()
 
-                    // Extract and register team & driver colors at runtime from API
-                    val color = rocks.urzahil.f1livetiming.ui.theme.TeamColors.parseHex(teamColour)
-                    if (color != null) {
-                        if (teamName.isNotBlank()) {
-                            rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(teamName, color)
-                        }
-                        if (acronym.isNotBlank()) {
-                            driverColorsMap[acronym] = color
-                            rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(acronym, color)
-                        }
-                        if (driverNum.isNotBlank()) {
-                            driverColorsMap[driverNum] = color
-                            rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(driverNum, color)
-                        }
-                        if (lastName.isNotBlank()) {
-                            driverColorsMap[lastName] = color
-                            rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(lastName, color)
-                        }
-                    }
-
-                    if (headshot.isNotBlank()) {
-                        if (acronym.isNotBlank()) headshotsMap[acronym] = headshot
-                        if (driverNum.isNotBlank()) headshotsMap[driverNum] = headshot
-                        if (lastName.isNotBlank()) headshotsMap[lastName] = headshot
-                    }
+            // Extract and register team & driver colors at runtime from API
+            val color = rocks.urzahil.f1livetiming.ui.theme.TeamColors.parseHex(teamColour)
+            if (color != null) {
+                if (teamName.isNotBlank()) {
+                    rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(teamName, color)
+                }
+                if (acronym.isNotBlank()) {
+                    driverColorsMap[acronym] = color
+                    rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(acronym, color)
+                }
+                if (driverNum.isNotBlank()) {
+                    driverColorsMap[driverNum] = color
+                    rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(driverNum, color)
+                }
+                if (lastName.isNotBlank()) {
+                    driverColorsMap[lastName] = color
+                    rocks.urzahil.f1livetiming.ui.theme.TeamColors.registerColor(lastName, color)
                 }
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            android.util.Log.w("F1ChampionshipRepository", "Driver metadata request failed (${error.javaClass.simpleName})")
+
+            if (headshot.isNotBlank()) {
+                if (acronym.isNotBlank()) headshotsMap[acronym] = headshot
+                if (driverNum.isNotBlank()) headshotsMap[driverNum] = headshot
+                if (lastName.isNotBlank()) headshotsMap[lastName] = headshot
+            }
         }
         return DriverMetadata(headshotsMap, driverColorsMap)
     }

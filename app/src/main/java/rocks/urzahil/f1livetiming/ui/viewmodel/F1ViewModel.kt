@@ -88,7 +88,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepo = ServerSettingsRepository(application)
     private val liveTimingCoordinator = LiveTimingCoordinator()
-    private val championshipRepo = F1ChampionshipRepository()
+    private val championshipRepo = F1ChampionshipRepository(File(application.filesDir, "openf1_drivers.json"))
     private val fiaDocumentsRepo = FiaDocumentsRepository(application.cacheDir)
 
     val backendUrl: StateFlow<String> = settingsRepo.backendUrl

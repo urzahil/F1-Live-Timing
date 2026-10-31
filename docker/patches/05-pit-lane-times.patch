@@ -1,5 +1,5 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index 87e6a3f..a906d69 100644
+index 87e6a3f..1fdc550 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
 @@ -27,7 +27,8 @@ const SUBSCRIBE_CHANNELS = [
@@ -28,13 +28,16 @@ index 87e6a3f..a906d69 100644
      }
  
      /**
-@@ -354,6 +357,13 @@ class F1LiveClient {
+@@ -354,6 +357,16 @@ class F1LiveClient {
                  deepMerge(this.extrapolatedClock, data);
                  this.broadcast({ type: 'ExtrapolatedClock', data: this.extrapolatedClock });
                  break;
 +            case 'PitLaneTimeCollection':
-+                // { PitTimes: { "<racing number>": { ... } } } — pit lane durations as the timing system
-+                // publishes them, merged per driver. "_kf" only marks a keyframe, so it is not kept.
++                // { PitTimes: { "<racing number>": { RacingNumber, Duration, Lap } } } — pit lane durations as the
++                // timing system publishes them, merged per driver. Duration is "" until a time is known, and a
++                // delta can list racing numbers to remove in PitTimes._deleted. "_kf" only marks a keyframe.
++                for (const racingNumber of (data.PitTimes && data.PitTimes._deleted) || []) delete (this.pitLaneTimes.PitTimes || {})[racingNumber];
++                if (data.PitTimes) delete data.PitTimes._deleted;
 +                deepMerge(this.pitLaneTimes, data);
 +                delete this.pitLaneTimes._kf;
 +                this.broadcast({ type: 'PitLaneTimeCollection', data: this.pitLaneTimes });
@@ -42,7 +45,7 @@ index 87e6a3f..a906d69 100644
          }
      }
  
-@@ -394,6 +404,10 @@ class F1LiveClient {
+@@ -394,6 +407,10 @@ class F1LiveClient {
          return this.extrapolatedClock;
      }
  

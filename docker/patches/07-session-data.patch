@@ -1,5 +1,5 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index 15df690..c4bfe3e 100644
+index a7938ff..e435b25 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
 @@ -29,7 +29,8 @@ const SUBSCRIBE_CHANNELS = [
@@ -12,15 +12,15 @@ index 15df690..c4bfe3e 100644
  ];
  
  class F1LiveClient {
-@@ -66,6 +67,7 @@ class F1LiveClient {
-         this.extrapolatedClock = {};
-         this.pitLaneTimes = {};
+@@ -68,6 +69,7 @@ class F1LiveClient {
+         // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
+         if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
          this.timingStats = {};
 +        this.sessionData = {};
      }
  
      /**
-@@ -288,6 +290,7 @@ class F1LiveClient {
+@@ -290,6 +292,7 @@ class F1LiveClient {
          if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
          if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
          if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
@@ -28,7 +28,7 @@ index 15df690..c4bfe3e 100644
      }
  
      /**
-@@ -372,6 +375,12 @@ class F1LiveClient {
+@@ -390,6 +393,12 @@ class F1LiveClient {
                  deepMerge(this.timingStats, data);
                  this.broadcast({ type: 'TimingStats', data: this.timingStats });
                  break;
@@ -41,7 +41,7 @@ index 15df690..c4bfe3e 100644
          }
      }
  
-@@ -420,6 +429,10 @@ class F1LiveClient {
+@@ -444,6 +453,10 @@ class F1LiveClient {
          return this.timingStats;
      }
  
@@ -53,10 +53,10 @@ index 15df690..c4bfe3e 100644
          return {
              isConnected: this.isConnected || this.replaying,
 diff --git a/src/routes/session.js b/src/routes/session.js
-index b2f20bc..28eaad9 100644
+index f446af8..32269c5 100644
 --- a/src/routes/session.js
 +++ b/src/routes/session.js
-@@ -120,6 +120,19 @@ function createSessionRouter(f1Client) {
+@@ -121,6 +121,19 @@ function createSessionRouter(f1Client) {
          }
      });
  

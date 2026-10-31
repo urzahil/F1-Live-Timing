@@ -36,6 +36,7 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
    - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
 4. **`04-fia-documents.patch`** mounts `GET /api/documents`, which lists the FIA decision documents of a grand prix (the code is in [`docker/fia-docs/`](fia-docs/)). See [FIA Documents](#fia-documents) below.
+5. **`05-track-status.patch`** subscribes to F1's official track status (`TrackStatus`: green, yellow, safety car, VSC, red flag) and returns it from `/api/session`, so the app's header pill follows the real flag state instead of guessing it from race control messages.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 

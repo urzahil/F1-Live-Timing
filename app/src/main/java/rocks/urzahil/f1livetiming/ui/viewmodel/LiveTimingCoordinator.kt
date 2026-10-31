@@ -33,6 +33,7 @@ internal class LiveTimingCoordinator(
     private var lastTimingsFetchAt = 0L
     private var lastSessionSuccessAt = 0L
     private var finalTimingFetchSessionKey: String? = null
+    private var raceControlTrackStatus = TrackStatus.CLEAR
 
     fun resetForBackendChange() {
         lastWeatherFetchAt = 0L
@@ -67,7 +68,10 @@ internal class LiveTimingCoordinator(
                     lastTimingsFetchAt = 0L
                     finalTimingFetchSessionKey = null
                 }
-                if (sessionChanged) snapshot = snapshot.copy(raceControl = emptyList(), trackStatus = TrackStatus.CLEAR)
+                if (sessionChanged) {
+                    snapshot = snapshot.copy(raceControl = emptyList())
+                    raceControlTrackStatus = TrackStatus.CLEAR
+                }
                 snapshot = snapshot.copy(session = parsed)
                 lastSessionSuccessAt = now
             }
@@ -123,7 +127,8 @@ internal class LiveTimingCoordinator(
             // Supplementary to the leaderboard: a failed fetch keeps the last list without marking
             // the whole snapshot stale.
             raceControlResult?.onSuccess { result ->
-                snapshot = snapshot.copy(raceControl = result.messages, trackStatus = result.trackStatus)
+                snapshot = snapshot.copy(raceControl = result.messages)
+                raceControlTrackStatus = result.trackStatus
             }
         }
 
@@ -133,7 +138,12 @@ internal class LiveTimingCoordinator(
             stale -> "Unable to refresh live data. Check the backend connection."
             else -> null
         }
-        snapshot = snapshot.copy(error = error)
+        // The feed's own track status is authoritative; race control messages are only a fallback for
+        // backends that do not report it.
+        snapshot = snapshot.copy(
+            error = error,
+            trackStatus = snapshot.session.trackStatus ?: raceControlTrackStatus
+        )
         return snapshot
     }
 

@@ -1,0 +1,98 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index a7938ff..e435b25 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -29,7 +29,8 @@ const SUBSCRIBE_CHANNELS = [
+     'TeamRadio',
+     'ExtrapolatedClock',
+     'PitLaneTimeCollection',
+-    'TimingStats'
++    'TimingStats',
++    'SessionData'
+ ];
+ 
+ class F1LiveClient {
+@@ -68,6 +69,7 @@ class F1LiveClient {
+         // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
+         if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
+         this.timingStats = {};
++        this.sessionData = {};
+     }
+ 
+     /**
+@@ -290,6 +292,7 @@ class F1LiveClient {
+         if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+         if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
+         if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
++        if (result.SessionData) this.routeData('SessionData', result.SessionData);
+     }
+ 
+     /**
+@@ -390,6 +393,12 @@ class F1LiveClient {
+                 deepMerge(this.timingStats, data);
+                 this.broadcast({ type: 'TimingStats', data: this.timingStats });
+                 break;
++            case 'SessionData':
++                // { Series: [{ Utc, Lap }], StatusSeries: [{ Utc, TrackStatus?, SessionStatus? }] } — lists that grow
++                // through index-keyed deltas, which deepMerge applies per index.
++                deepMerge(this.sessionData, data);
++                this.broadcast({ type: 'SessionData', data: this.sessionData });
++                break;
+         }
+     }
+ 
+@@ -444,6 +453,10 @@ class F1LiveClient {
+         return this.timingStats;
+     }
+ 
++    getSessionData() {
++        return this.sessionData;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index f446af8..32269c5 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -121,6 +121,19 @@ function createSessionRouter(f1Client) {
+         }
+     });
+ 
++    /**
++     * GET /api/session-data
++     * Retrieves the lap start timestamps and the track and session status history (SessionData channel).
++     */
++    router.get('/session-data', (req, res) => {
++        try {
++            res.status(200).json({ SessionData: f1Client.getSessionData() || {} });
++        } catch (error) {
++            console.error('[API Error] Failed to retrieve SessionData:', error);
++            res.status(500).json({ error: 'Internal server error while querying SessionData.' });
++        }
++    });
++
+     return router;
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index d08d544..242ddda 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -89,6 +89,7 @@ app.use((req, res) => {
+             '/api/radio',
+             '/api/pitstops',
+             '/api/timing-stats',
++            '/api/session-data',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -114,6 +115,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/radio         (alias: /api/team-radio)`);
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
++    console.log(`    - GET http://localhost:${PORT}/api/session-data`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

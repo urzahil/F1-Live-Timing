@@ -1,0 +1,99 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index e435b25..eee650e 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -30,7 +30,8 @@ const SUBSCRIBE_CHANNELS = [
+     'ExtrapolatedClock',
+     'PitLaneTimeCollection',
+     'TimingStats',
+-    'SessionData'
++    'SessionData',
++    'PitStopSeries'
+ ];
+ 
+ class F1LiveClient {
+@@ -70,6 +71,7 @@ class F1LiveClient {
+         if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
+         this.timingStats = {};
+         this.sessionData = {};
++        this.pitStopSeries = {};
+     }
+ 
+     /**
+@@ -293,6 +295,7 @@ class F1LiveClient {
+         if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
+         if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
+         if (result.SessionData) this.routeData('SessionData', result.SessionData);
++        if (result.PitStopSeries) this.routeData('PitStopSeries', result.PitStopSeries);
+     }
+ 
+     /**
+@@ -399,6 +402,13 @@ class F1LiveClient {
+                 deepMerge(this.sessionData, data);
+                 this.broadcast({ type: 'SessionData', data: this.sessionData });
+                 break;
++            case 'PitStopSeries':
++                // Format not confirmed yet: kept as the feed sends it (minus the "_kf" keyframe marker) so it can
++                // be inspected through /api/pitstop-series and in recordings.
++                deepMerge(this.pitStopSeries, data);
++                delete this.pitStopSeries._kf;
++                this.broadcast({ type: 'PitStopSeries', data: this.pitStopSeries });
++                break;
+         }
+     }
+ 
+@@ -457,6 +467,10 @@ class F1LiveClient {
+         return this.sessionData;
+     }
+ 
++    getPitStopSeries() {
++        return this.pitStopSeries;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index 32269c5..d4963c2 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -134,6 +134,19 @@ function createSessionRouter(f1Client) {
+         }
+     });
+ 
++    /**
++     * GET /api/pitstop-series
++     * Retrieves the PitStopSeries channel as the feed sends it (format not confirmed yet).
++     */
++    router.get('/pitstop-series', (req, res) => {
++        try {
++            res.status(200).json({ PitStopSeries: f1Client.getPitStopSeries() || {} });
++        } catch (error) {
++            console.error('[API Error] Failed to retrieve PitStopSeries:', error);
++            res.status(500).json({ error: 'Internal server error while querying PitStopSeries.' });
++        }
++    });
++
+     return router;
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index 242ddda..68bcf45 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -90,6 +90,7 @@ app.use((req, res) => {
+             '/api/pitstops',
+             '/api/timing-stats',
+             '/api/session-data',
++            '/api/pitstop-series',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -116,6 +117,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
+     console.log(`    - GET http://localhost:${PORT}/api/session-data`);
++    console.log(`    - GET http://localhost:${PORT}/api/pitstop-series`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

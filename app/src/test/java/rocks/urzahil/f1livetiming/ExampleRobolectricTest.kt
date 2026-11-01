@@ -354,6 +354,20 @@ class ExampleRobolectricTest {
     val aborted = session("", status = "Aborted")
     assertEquals(true, aborted.isLive)
     assertEquals(TrackStatus.RED_FLAG, aborted.trackStatus)
+
+    // A suspension stays a red flag while TrackStatus still reads safety car or goes back to all clear.
+    val sc = ""","TrackStatus":{"Status":"4","Message":"SCDeployed"}"""
+    val allClear = ""","TrackStatus":{"Status":"1","Message":"AllClear"}"""
+    assertEquals(TrackStatus.RED_FLAG, session(sc, status = "Aborted").trackStatus)
+    assertEquals(TrackStatus.RED_FLAG, session(allClear, status = "Aborted").trackStatus)
+
+    // The live SessionStatus channel wins over SessionInfo's own field.
+    val suspended = session(""","SessionStatus":{"Status":"Aborted"}$allClear""")
+    assertEquals(true, suspended.isLive)
+    assertEquals(TrackStatus.RED_FLAG, suspended.trackStatus)
+    val resumed = session(""","SessionStatus":{"Status":"Started"}$sc""", status = "Aborted")
+    assertEquals(TrackStatus.SAFETY_CAR, resumed.trackStatus)
+    assertEquals(false, session(""","SessionStatus":{"Status":"Ends"}""").isLive)
   }
 
   @Test

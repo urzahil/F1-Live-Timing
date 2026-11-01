@@ -416,8 +416,12 @@ class F1LiveRepository {
             val totalLaps = lapCountObj?.optInt("TotalLaps", 0)
                 ?: sessionRoot.optInt("TotalLaps", json.optInt("TotalLaps", 0))
 
-            val rawStatus = sessionRoot.optString("SessionStatus").ifBlank {
-                sessionRoot.optString("Status", json.optString("Status", ""))
+            // The live SessionStatus channel (backend patch 08) follows every state change; SessionInfo's
+            // own SessionStatus field is the fallback for older backends.
+            val rawStatus = json.optJSONObject("SessionStatus")?.optString("Status").orEmpty().ifBlank {
+                sessionRoot.optString("SessionStatus").ifBlank {
+                    sessionRoot.optString("Status", json.optString("Status", ""))
+                }
             }
 
             // The feed reports a red-flagged session as "Aborted"; it is still running and resumes later.
@@ -429,7 +433,8 @@ class F1LiveRepository {
             val isFinished = rawStatus.equals("Finished", ignoreCase = true) ||
                     rawStatus.equals("Finalised", ignoreCase = true) ||
                     rawStatus.equals("Finalized", ignoreCase = true) ||
-                    rawStatus.equals("Ended", ignoreCase = true)
+                    rawStatus.equals("Ended", ignoreCase = true) ||
+                    rawStatus.equals("Ends", ignoreCase = true)
 
             val displayStatus = when {
                 isStarted && !isFinished -> "STARTED"
@@ -450,8 +455,10 @@ class F1LiveRepository {
                 status = displayStatus,
                 isLive = isLive,
                 clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock")),
-                trackStatus = parseTrackStatus(json.optJSONObject("TrackStatus"))
-                    ?: if (isAborted) TrackStatus.RED_FLAG else null
+                // A suspended session is a red flag whatever TrackStatus says: during a race suspension the
+                // feed's TrackStatus can keep reading SCDeployed, or go back to AllClear, until the restart.
+                trackStatus = if (isAborted) TrackStatus.RED_FLAG
+                    else parseTrackStatus(json.optJSONObject("TrackStatus"))
             )
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")

@@ -215,15 +215,19 @@ class F1LiveRepository {
                 "SAFETY CAR" in text -> when {
                     "DEPLOYED" in text -> TrackStatus.SAFETY_CAR
                     "ENDING" in text -> TrackStatus.CLEAR
+                    // A race resumed behind the safety car is under it until it comes in.
+                    status == TrackStatus.RED_FLAG && "IN THIS LAP" in text -> TrackStatus.SAFETY_CAR
                     else -> status
                 }
                 // Races announce it as "RED FLAG - RACE SUSPENDED" with no Flag or Scope at all.
                 (m.flag == "RED" || text.trim().startsWith("RED FLAG") || "SUSPENDED" in text) &&
                     (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
                 m.flag == "CHEQUERED" -> TrackStatus.CLEAR
-                // A race resumes with "STANDING START" (or "ROLLING START") at the announced time, then
-                // "OVERTAKE ENABLED" once racing; neither posts a green flag. "RACE WILL RESUME AT" does not end it.
-                status == TrackStatus.RED_FLAG && ("STANDING START" in text || "ROLLING START" in text ||
+                // A race resumes with "STANDING START" at the announced time, then "OVERTAKE ENABLED" once
+                // racing; neither posts a green flag. "RACE WILL RESUME AT" does not end it. A "ROLLING START"
+                // resumption leaves behind the safety car, so it continues as a safety car period.
+                status == TrackStatus.RED_FLAG && "ROLLING START" in text -> TrackStatus.SAFETY_CAR
+                status == TrackStatus.RED_FLAG && ("STANDING START" in text ||
                     text.trim() == "RACE START" || text.trim() == "OVERTAKE ENABLED") -> TrackStatus.CLEAR
                 // Marshals clearing the track during a suspension post "TRACK CLEAR" while the session is still
                 // stopped, so a red flag only ends when the pit exit opens again (a green track flag).

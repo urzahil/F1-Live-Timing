@@ -347,6 +347,11 @@ class ExampleRobolectricTest {
     // The race resumed with a standing start (or, failing that, overtaking is re-enabled after it).
     assertEquals(TrackStatus.CLEAR, status(*resuming, "||STANDING START"))
     assertEquals(TrackStatus.CLEAR, status(*resuming, "||OVERTAKE ENABLED"))
+    // A restart behind the safety car is a safety car period, which ends as usual.
+    assertEquals(TrackStatus.SAFETY_CAR, status(*resuming, "||ROLLING START"))
+    assertEquals(TrackStatus.SAFETY_CAR, status(*resuming, "||SAFETY CAR IN THIS LAP"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||ROLLING START", "||SAFETY CAR IN THIS LAP", "CLEAR|Track|TRACK CLEAR"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||SAFETY CAR IN THIS LAP", "GREEN|Track|GREEN FLAG"))
     // The red flag also ends when the pit exit opens again, or with a safety car restart.
     assertEquals(TrackStatus.CLEAR, status(*suspension, "GREEN|Track|GREEN LIGHT - PIT EXIT OPEN"))
     assertEquals(TrackStatus.SAFETY_CAR, status(*suspension, "||SAFETY CAR DEPLOYED"))

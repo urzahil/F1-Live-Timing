@@ -24,7 +24,6 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 06 - Subscribes to PitLaneTimeCollection and serves it from GET /api/pitstops, with the session's completed stops.
 # 07 - Subscribes to TimingStats and serves it from GET /api/timing-stats (needs 06).
 # 08 - Subscribes to SessionData and serves it from GET /api/session-data (needs 07).
-# 09 - Subscribes to PitStopSeries (format unconfirmed) and serves it raw from GET /api/pitstop-series (needs 08).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \

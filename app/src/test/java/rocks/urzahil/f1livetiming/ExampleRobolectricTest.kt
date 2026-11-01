@@ -331,6 +331,30 @@ class ExampleRobolectricTest {
     assertEquals(TrackStatus.RED_FLAG, status("|Track|RED FLAG"))
     // A sector-only clear must not end a track-wide condition.
     assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "CLEAR|Sector|CLEAR IN TRACK SECTOR 4"))
+
+    // Mexico City 2026: safety car, then a red flag with no Flag/Scope, then TRACK CLEAR during the suspension.
+    val suspension = arrayOf(
+      "||SAFETY CAR DEPLOYED",
+      "||RED FLAG - RACE SUSPENDED",
+      "CLEAR|Sector|CLEAR IN TRACK SECTOR 2",
+      "CLEAR|Track|TRACK CLEAR",
+      "DOUBLE YELLOW|Sector|DOUBLE YELLOW IN TRACK SECTOR 3"
+    )
+    assertEquals(TrackStatus.RED_FLAG, status(*suspension))
+    // Still suspended while the resumption is announced and the safety car lights come on.
+    val resuming = arrayOf(*suspension, "||RACE WILL RESUME AT 15:45", "||SAFETY CAR LIGHTS ON")
+    assertEquals(TrackStatus.RED_FLAG, status(*resuming))
+    // The race resumed with a standing start (or, failing that, overtaking is re-enabled after it).
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||STANDING START"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||OVERTAKE ENABLED"))
+    // A restart behind the safety car is a safety car period, which ends as usual.
+    assertEquals(TrackStatus.SAFETY_CAR, status(*resuming, "||ROLLING START"))
+    assertEquals(TrackStatus.SAFETY_CAR, status(*resuming, "||SAFETY CAR IN THIS LAP"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||ROLLING START", "||SAFETY CAR IN THIS LAP", "CLEAR|Track|TRACK CLEAR"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||SAFETY CAR IN THIS LAP", "GREEN|Track|GREEN FLAG"))
+    // The red flag also ends when the pit exit opens again, or with a safety car restart.
+    assertEquals(TrackStatus.CLEAR, status(*suspension, "GREEN|Track|GREEN LIGHT - PIT EXIT OPEN"))
+    assertEquals(TrackStatus.SAFETY_CAR, status(*suspension, "||SAFETY CAR DEPLOYED"))
   }
 
   @Test
@@ -354,6 +378,20 @@ class ExampleRobolectricTest {
     val aborted = session("", status = "Aborted")
     assertEquals(true, aborted.isLive)
     assertEquals(TrackStatus.RED_FLAG, aborted.trackStatus)
+
+    // A suspension stays a red flag while TrackStatus still reads safety car or goes back to all clear.
+    val sc = ""","TrackStatus":{"Status":"4","Message":"SCDeployed"}"""
+    val allClear = ""","TrackStatus":{"Status":"1","Message":"AllClear"}"""
+    assertEquals(TrackStatus.RED_FLAG, session(sc, status = "Aborted").trackStatus)
+    assertEquals(TrackStatus.RED_FLAG, session(allClear, status = "Aborted").trackStatus)
+
+    // The live SessionStatus channel wins over SessionInfo's own field.
+    val suspended = session(""","SessionStatus":{"Status":"Aborted"}$allClear""")
+    assertEquals(true, suspended.isLive)
+    assertEquals(TrackStatus.RED_FLAG, suspended.trackStatus)
+    val resumed = session(""","SessionStatus":{"Status":"Started"}$sc""", status = "Aborted")
+    assertEquals(TrackStatus.SAFETY_CAR, resumed.trackStatus)
+    assertEquals(false, session(""","SessionStatus":{"Status":"Ends"}""").isLive)
   }
 
   @Test

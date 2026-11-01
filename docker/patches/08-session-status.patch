@@ -1,0 +1,82 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 91477ee..78d3722 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -30,7 +30,8 @@ const SUBSCRIBE_CHANNELS = [
+     'ExtrapolatedClock',
+     'TrackStatus',
+     'PitLaneTimeCollection',
+-    'TimingStats'
++    'TimingStats',
++    'SessionStatus'
+ ];
+ 
+ class F1LiveClient {
+@@ -70,6 +71,7 @@ class F1LiveClient {
+         // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
+         if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
+         this.timingStats = {};
++        this.sessionStatus = {};
+     }
+ 
+     /**
+@@ -293,6 +295,7 @@ class F1LiveClient {
+         if (result.TrackStatus) this.routeData('TrackStatus', result.TrackStatus);
+         if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
+         if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
++        if (result.SessionStatus) this.routeData('SessionStatus', result.SessionStatus);
+     }
+ 
+     /**
+@@ -371,6 +374,12 @@ class F1LiveClient {
+                 deepMerge(this.trackStatus, data);
+                 this.broadcast({ type: 'TrackStatus', data: this.trackStatus });
+                 break;
++            case 'SessionStatus':
++                // { Status: "Inactive" | "Started" | "Aborted" | "Finished" | "Finalised" | "Ends" } — "Aborted"
++                // while the session is suspended under a red flag. Sent live, unlike SessionInfo's own field.
++                deepMerge(this.sessionStatus, data);
++                this.broadcast({ type: 'SessionStatus', data: this.sessionStatus });
++                break;
+             case 'PitLaneTimeCollection':
+                 // { PitTimes: { "<racing number>": { RacingNumber, Duration, Lap } } } — pit lane durations as the
+                 // timing system publishes them, merged per driver. Duration is "" until a time is known, and a
+@@ -443,6 +452,10 @@ class F1LiveClient {
+         return this.trackStatus;
+     }
+ 
++    getSessionStatus() {
++        return this.sessionStatus;
++    }
++
+     getPitStops() {
+         const key = this.session.Key;
+         if (key !== undefined && this.pitStops.key !== undefined && this.pitStops.key !== key) return {};
+diff --git a/src/routes/session.js b/src/routes/session.js
+index d15a254..fa2484b 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -18,14 +18,21 @@ function createSessionRouter(f1Client) {
+     /**
+      * GET /api/session
+      * Retrieves current meeting and session metadata (SessionInfo channel), the session clock
+-     * (ExtrapolatedClock channel) and the track-wide flag state (TrackStatus channel).
++     * (ExtrapolatedClock channel), the track-wide flag state (TrackStatus channel) and the live session
++     * state (SessionStatus channel, "Aborted" while suspended under a red flag).
+      */
+     router.get('/session', (req, res) => {
+         try {
+             const sessionInfo = f1Client.getSessionInfo() || {};
+             const extrapolatedClock = f1Client.getExtrapolatedClock() || {};
+             const trackStatus = f1Client.getTrackStatus() || {};
+-            res.status(200).json({ Session: sessionInfo, ExtrapolatedClock: extrapolatedClock, TrackStatus: trackStatus });
++            const sessionStatus = f1Client.getSessionStatus() || {};
++            res.status(200).json({
++                Session: sessionInfo,
++                ExtrapolatedClock: extrapolatedClock,
++                TrackStatus: trackStatus,
++                SessionStatus: sessionStatus
++            });
+         } catch (error) {
+             console.error('[API Error] Failed to retrieve session info:', error);
+             res.status(500).json({ error: 'Internal server error while querying SessionInfo.' });

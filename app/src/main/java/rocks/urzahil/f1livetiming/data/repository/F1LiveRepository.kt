@@ -197,7 +197,9 @@ class F1LiveRepository {
     /**
      * Track condition after replaying [messagesOldestFirst]. The feed has no live track status
      * here, so it is read from the messages: a safety car, VSC or red flag stays in force until
-     * a track-wide clear/green (or the VSC announces its end). Sector-scoped flags are ignored.
+     * a track-wide clear/green (or the VSC announces its end); a red flag only ends on a green track flag,
+     * a standing/rolling start announcement, a safety car or VSC restart, or the chequered flag. Sector-scoped
+     * flags are ignored.
      */
     fun deriveTrackStatus(messagesOldestFirst: List<ParsedRaceControlMessage>): TrackStatus {
         var status = TrackStatus.CLEAR
@@ -213,10 +215,24 @@ class F1LiveRepository {
                 "SAFETY CAR" in text -> when {
                     "DEPLOYED" in text -> TrackStatus.SAFETY_CAR
                     "ENDING" in text -> TrackStatus.CLEAR
+                    // A race resumed behind the safety car is under it until it comes in.
+                    status == TrackStatus.RED_FLAG && "IN THIS LAP" in text -> TrackStatus.SAFETY_CAR
                     else -> status
                 }
-                (m.flag == "RED" || text.trim() == "RED FLAG") && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
-                trackWide && (m.flag == "CLEAR" || m.flag == "GREEN") -> TrackStatus.CLEAR
+                // Races announce it as "RED FLAG - RACE SUSPENDED" with no Flag or Scope at all.
+                (m.flag == "RED" || text.trim().startsWith("RED FLAG") || "SUSPENDED" in text) &&
+                    (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
+                m.flag == "CHEQUERED" -> TrackStatus.CLEAR
+                // A race resumes with "STANDING START" at the announced time, then "OVERTAKE ENABLED" once
+                // racing; neither posts a green flag. "RACE WILL RESUME AT" does not end it. A "ROLLING START"
+                // resumption leaves behind the safety car, so it continues as a safety car period.
+                status == TrackStatus.RED_FLAG && "ROLLING START" in text -> TrackStatus.SAFETY_CAR
+                status == TrackStatus.RED_FLAG && ("STANDING START" in text ||
+                    text.trim() == "RACE START" || text.trim() == "OVERTAKE ENABLED") -> TrackStatus.CLEAR
+                // Marshals clearing the track during a suspension post "TRACK CLEAR" while the session is still
+                // stopped, so a red flag only ends when the pit exit opens again (a green track flag).
+                trackWide && m.flag == "GREEN" -> TrackStatus.CLEAR
+                trackWide && m.flag == "CLEAR" && status != TrackStatus.RED_FLAG -> TrackStatus.CLEAR
                 else -> status
             }
         }
@@ -416,8 +432,12 @@ class F1LiveRepository {
             val totalLaps = lapCountObj?.optInt("TotalLaps", 0)
                 ?: sessionRoot.optInt("TotalLaps", json.optInt("TotalLaps", 0))
 
-            val rawStatus = sessionRoot.optString("SessionStatus").ifBlank {
-                sessionRoot.optString("Status", json.optString("Status", ""))
+            // The live SessionStatus channel (backend patch 08) follows every state change; SessionInfo's
+            // own SessionStatus field is the fallback for older backends.
+            val rawStatus = json.optJSONObject("SessionStatus")?.optString("Status").orEmpty().ifBlank {
+                sessionRoot.optString("SessionStatus").ifBlank {
+                    sessionRoot.optString("Status", json.optString("Status", ""))
+                }
             }
 
             // The feed reports a red-flagged session as "Aborted"; it is still running and resumes later.
@@ -429,7 +449,8 @@ class F1LiveRepository {
             val isFinished = rawStatus.equals("Finished", ignoreCase = true) ||
                     rawStatus.equals("Finalised", ignoreCase = true) ||
                     rawStatus.equals("Finalized", ignoreCase = true) ||
-                    rawStatus.equals("Ended", ignoreCase = true)
+                    rawStatus.equals("Ended", ignoreCase = true) ||
+                    rawStatus.equals("Ends", ignoreCase = true)
 
             val displayStatus = when {
                 isStarted && !isFinished -> "STARTED"
@@ -450,8 +471,10 @@ class F1LiveRepository {
                 status = displayStatus,
                 isLive = isLive,
                 clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock")),
-                trackStatus = parseTrackStatus(json.optJSONObject("TrackStatus"))
-                    ?: if (isAborted) TrackStatus.RED_FLAG else null
+                // A suspended session is a red flag whatever TrackStatus says: during a race suspension the
+                // feed's TrackStatus can keep reading SCDeployed, or go back to AllClear, until the restart.
+                trackStatus = if (isAborted) TrackStatus.RED_FLAG
+                    else parseTrackStatus(json.optJSONObject("TrackStatus"))
             )
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")

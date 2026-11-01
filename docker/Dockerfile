@@ -23,6 +23,7 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 05 - Subscribes to TrackStatus (the official green/SC/VSC/red flag state) and returns it from /api/session.
 # 06 - Subscribes to PitLaneTimeCollection and serves it from GET /api/pitstops, with the session's completed stops.
 # 07 - Subscribes to TimingStats and serves it from GET /api/timing-stats (needs 06).
+# 08 - Subscribes to SessionStatus ("Aborted" while red-flagged) and returns it from /api/session (needs 07).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \

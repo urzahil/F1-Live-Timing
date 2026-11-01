@@ -3,6 +3,7 @@ package rocks.urzahil.f1livetiming
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import rocks.urzahil.f1livetiming.data.api.NetworkClient
+import rocks.urzahil.f1livetiming.data.repository.F1ChampionshipRepository
 import rocks.urzahil.f1livetiming.data.repository.F1LiveRepository
 import rocks.urzahil.f1livetiming.data.repository.TrackStatus
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
@@ -31,6 +32,23 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `stored OpenF1 driver list supplies headshots when OpenF1 is unreachable`() {
+    val file = java.io.File.createTempFile("openf1_drivers", ".json").apply { deleteOnExit() }
+    file.writeText(
+      """[{"name_acronym":"ver","driver_number":1,"last_name":"Verstappen",""" +
+        """"headshot_url":"https://media.formula1.com/ver.png","team_colour":"3671C6","team_name":"Red Bull Racing"}]"""
+    )
+    val metadata = F1ChampionshipRepository(file).loadStoredDriverMetadata()
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["VER"])
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["1"])
+    assertEquals("https://media.formula1.com/ver.png", metadata.headshots["verstappen"])
+
+    file.writeText("not json")
+    assertTrue(F1ChampionshipRepository(file).loadStoredDriverMetadata().headshots.isEmpty())
+    assertTrue(F1ChampionshipRepository(null).loadStoredDriverMetadata().headshots.isEmpty())
+  }
+
+  @Test
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
@@ -54,6 +72,17 @@ class ExampleRobolectricTest {
     val session = repo.parseSessionJson("{\"Session\":{}}")
     assertFalse(session.isLive)
     assertEquals("NO ACTIVE SESSION", session.status)
+  }
+
+  @Test
+  fun `session names fall back when the preferred field is missing`() {
+    val repo = F1LiveRepository()
+    val session = repo.parseSessionJson(
+      """{"Session":{"Meeting":{"OfficialName":"FORMULA 1 GRAND PRIX"},"Session":{"Type":"Race"},"Name":"Race","SessionStatus":"Started"}}"""
+    )
+    assertEquals("FORMULA 1 GRAND PRIX", session.meetingName)
+    assertEquals("Race", session.sessionName)
+    assertEquals("Race", session.sessionType)
   }
 
   @Test
@@ -272,13 +301,13 @@ class ExampleRobolectricTest {
     }
     val raw = """{"RaceControl":[$messages,{"Utc":"2026-10-23T17:50:00","Category":"Other","Message":""}]}"""
 
-    val parsed = repo.parseRaceControlJson(raw)
+    val parsed = repo.parseRaceControl(raw).messages
 
     assertEquals(listOf("MSG 7", "MSG 6", "MSG 5", "MSG 4", "MSG 3"), parsed.map { it.message })
     assertEquals("YELLOW", parsed.first().flag)
     // Times are converted from UTC to the device zone; only the shape is stable across machines.
     assert(Regex("""\d{2}:\d{2}:\d{2}""").matches(parsed.first().time))
-    assertEquals(emptyList<Any>(), repo.parseRaceControlJson("""{"RaceControl":[]}"""))
+    assertEquals(emptyList<Any>(), repo.parseRaceControl("""{"RaceControl":[]}""").messages)
   }
 
   @Test
@@ -299,8 +328,32 @@ class ExampleRobolectricTest {
     assertEquals(TrackStatus.VIRTUAL_SAFETY_CAR, status("||VIRTUAL SAFETY CAR DEPLOYED"))
     assertEquals(TrackStatus.CLEAR, status("||VIRTUAL SAFETY CAR DEPLOYED", "||VIRTUAL SAFETY CAR ENDING"))
     assertEquals(TrackStatus.RED_FLAG, status("RED|Track|RED FLAG"))
+    assertEquals(TrackStatus.RED_FLAG, status("|Track|RED FLAG"))
     // A sector-only clear must not end a track-wide condition.
     assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "CLEAR|Sector|CLEAR IN TRACK SECTOR 4"))
+  }
+
+  @Test
+  fun `feed track status drives the header pill and an aborted session is a live red flag`() {
+    val repo = F1LiveRepository()
+    fun session(extra: String, status: String = "Started") = repo.parseSessionJson(
+      """{"Session":{"Meeting":{"Name":"Mexico City Grand Prix"},"Type":"Qualifying","Name":"Qualifying",
+        "SessionStatus":"$status"}$extra}"""
+    )
+
+    val red = session(""","TrackStatus":{"Status":"5","Message":"Red"}""")
+    assertEquals(true, red.isLive)
+    assertEquals(TrackStatus.RED_FLAG, red.trackStatus)
+    assertEquals(TrackStatus.CLEAR, session(""","TrackStatus":{"Status":"1","Message":"AllClear"}""").trackStatus)
+    assertEquals(TrackStatus.CLEAR, session(""","TrackStatus":{"Status":"2","Message":"Yellow"}""").trackStatus)
+    assertEquals(TrackStatus.SAFETY_CAR, session(""","TrackStatus":{"Status":"4","Message":"SCDeployed"}""").trackStatus)
+    assertEquals(TrackStatus.VIRTUAL_SAFETY_CAR, session(""","TrackStatus":{"Message":"VSCDeployed"}""").trackStatus)
+    // Older backends without TrackStatus leave it to the race control messages.
+    assertEquals(null, session("").trackStatus)
+
+    val aborted = session("", status = "Aborted")
+    assertEquals(true, aborted.isLive)
+    assertEquals(TrackStatus.RED_FLAG, aborted.trackStatus)
   }
 
   @Test

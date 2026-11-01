@@ -1,10 +1,10 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index a7938ff..e435b25 100644
+index 91477ee..3d72b5e 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
-@@ -29,7 +29,8 @@ const SUBSCRIBE_CHANNELS = [
-     'TeamRadio',
+@@ -30,7 +30,8 @@ const SUBSCRIBE_CHANNELS = [
      'ExtrapolatedClock',
+     'TrackStatus',
      'PitLaneTimeCollection',
 -    'TimingStats'
 +    'TimingStats',
@@ -12,7 +12,7 @@ index a7938ff..e435b25 100644
  ];
  
  class F1LiveClient {
-@@ -68,6 +69,7 @@ class F1LiveClient {
+@@ -70,6 +71,7 @@ class F1LiveClient {
          // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
          if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
          this.timingStats = {};
@@ -20,15 +20,15 @@ index a7938ff..e435b25 100644
      }
  
      /**
-@@ -290,6 +292,7 @@ class F1LiveClient {
-         if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+@@ -293,6 +295,7 @@ class F1LiveClient {
+         if (result.TrackStatus) this.routeData('TrackStatus', result.TrackStatus);
          if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
          if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
 +        if (result.SessionData) this.routeData('SessionData', result.SessionData);
      }
  
      /**
-@@ -390,6 +393,12 @@ class F1LiveClient {
+@@ -399,6 +402,12 @@ class F1LiveClient {
                  deepMerge(this.timingStats, data);
                  this.broadcast({ type: 'TimingStats', data: this.timingStats });
                  break;
@@ -41,7 +41,7 @@ index a7938ff..e435b25 100644
          }
      }
  
-@@ -444,6 +453,10 @@ class F1LiveClient {
+@@ -457,6 +466,10 @@ class F1LiveClient {
          return this.timingStats;
      }
  
@@ -53,10 +53,10 @@ index a7938ff..e435b25 100644
          return {
              isConnected: this.isConnected || this.replaying,
 diff --git a/src/routes/session.js b/src/routes/session.js
-index f446af8..32269c5 100644
+index d15a254..3906dd4 100644
 --- a/src/routes/session.js
 +++ b/src/routes/session.js
-@@ -121,6 +121,19 @@ function createSessionRouter(f1Client) {
+@@ -122,6 +122,19 @@ function createSessionRouter(f1Client) {
          }
      });
  

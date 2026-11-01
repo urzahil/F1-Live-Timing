@@ -1,9 +1,7 @@
 package rocks.urzahil.f1livetiming.ui.viewmodel
 
 import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import rocks.urzahil.f1livetiming.data.model.scheduleUtcMillis
 
 /** Picks the races of the season that can have FIA documents, for the "FIA Documents" tool. */
 object FiaDocumentRaces {
@@ -30,19 +28,6 @@ object FiaDocumentRaces {
         val session = race.firstPractice
         val date = session?.date ?: race.date
         val time = if (session?.date != null) session.time else race.time
-        return parseUtcMillis(date, time)
-    }
-
-    private fun parseUtcMillis(date: String?, time: String?): Long? {
-        if (date.isNullOrBlank()) return null
-        val cleanTime = time?.replace("Z", "")?.trim().takeUnless { it.isNullOrBlank() }
-            ?.let { if (it.length == 5) "$it:00" else it } ?: "00:00:00"
-        return try {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }.parse("${date.trim()}T$cleanTime")?.time
-        } catch (_: Exception) {
-            null
-        }
+        return scheduleUtcMillis(date, time)
     }
 }

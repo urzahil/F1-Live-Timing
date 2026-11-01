@@ -1,18 +1,18 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index 589ed0b..a7938ff 100644
+index c56a597..91477ee 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
-@@ -28,7 +28,8 @@ const SUBSCRIBE_CHANNELS = [
-     'LapCount',
+@@ -29,7 +29,8 @@ const SUBSCRIBE_CHANNELS = [
      'TeamRadio',
      'ExtrapolatedClock',
+     'TrackStatus',
 -    'PitLaneTimeCollection'
 +    'PitLaneTimeCollection',
 +    'TimingStats'
  ];
  
  class F1LiveClient {
-@@ -66,6 +67,7 @@ class F1LiveClient {
+@@ -68,6 +69,7 @@ class F1LiveClient {
          this.pitLaneTimes = {};
          // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
          if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
@@ -20,15 +20,15 @@ index 589ed0b..a7938ff 100644
      }
  
      /**
-@@ -287,6 +289,7 @@ class F1LiveClient {
-         if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
+@@ -290,6 +292,7 @@ class F1LiveClient {
          if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+         if (result.TrackStatus) this.routeData('TrackStatus', result.TrackStatus);
          if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
 +        if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
      }
  
      /**
-@@ -382,6 +385,11 @@ class F1LiveClient {
+@@ -391,6 +394,11 @@ class F1LiveClient {
                  delete this.pitLaneTimes._kf;
                  this.broadcast({ type: 'PitLaneTimeCollection', data: this.pitLaneTimes });
                  break;
@@ -40,7 +40,7 @@ index 589ed0b..a7938ff 100644
          }
      }
  
-@@ -432,6 +440,10 @@ class F1LiveClient {
+@@ -445,6 +453,10 @@ class F1LiveClient {
          return this.pitLaneTimes;
      }
  
@@ -52,10 +52,10 @@ index 589ed0b..a7938ff 100644
          return {
              isConnected: this.isConnected || this.replaying,
 diff --git a/src/routes/session.js b/src/routes/session.js
-index c24ff59..f446af8 100644
+index 77ccdde..d15a254 100644
 --- a/src/routes/session.js
 +++ b/src/routes/session.js
-@@ -108,6 +108,19 @@ function createSessionRouter(f1Client) {
+@@ -109,6 +109,19 @@ function createSessionRouter(f1Client) {
          }
      });
  

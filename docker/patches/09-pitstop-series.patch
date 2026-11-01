@@ -1,9 +1,9 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index e435b25..eee650e 100644
+index 3d72b5e..db3fcab 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
-@@ -30,7 +30,8 @@ const SUBSCRIBE_CHANNELS = [
-     'ExtrapolatedClock',
+@@ -31,7 +31,8 @@ const SUBSCRIBE_CHANNELS = [
+     'TrackStatus',
      'PitLaneTimeCollection',
      'TimingStats',
 -    'SessionData'
@@ -12,7 +12,7 @@ index e435b25..eee650e 100644
  ];
  
  class F1LiveClient {
-@@ -70,6 +71,7 @@ class F1LiveClient {
+@@ -72,6 +73,7 @@ class F1LiveClient {
          if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
          this.timingStats = {};
          this.sessionData = {};
@@ -20,7 +20,7 @@ index e435b25..eee650e 100644
      }
  
      /**
-@@ -293,6 +295,7 @@ class F1LiveClient {
+@@ -296,6 +298,7 @@ class F1LiveClient {
          if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
          if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
          if (result.SessionData) this.routeData('SessionData', result.SessionData);
@@ -28,7 +28,7 @@ index e435b25..eee650e 100644
      }
  
      /**
-@@ -399,6 +402,13 @@ class F1LiveClient {
+@@ -408,6 +411,13 @@ class F1LiveClient {
                  deepMerge(this.sessionData, data);
                  this.broadcast({ type: 'SessionData', data: this.sessionData });
                  break;
@@ -42,7 +42,7 @@ index e435b25..eee650e 100644
          }
      }
  
-@@ -457,6 +467,10 @@ class F1LiveClient {
+@@ -470,6 +480,10 @@ class F1LiveClient {
          return this.sessionData;
      }
  
@@ -54,10 +54,10 @@ index e435b25..eee650e 100644
          return {
              isConnected: this.isConnected || this.replaying,
 diff --git a/src/routes/session.js b/src/routes/session.js
-index 32269c5..d4963c2 100644
+index 3906dd4..df50d99 100644
 --- a/src/routes/session.js
 +++ b/src/routes/session.js
-@@ -134,6 +134,19 @@ function createSessionRouter(f1Client) {
+@@ -135,6 +135,19 @@ function createSessionRouter(f1Client) {
          }
      });
  

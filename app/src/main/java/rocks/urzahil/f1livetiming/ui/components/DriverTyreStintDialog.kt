@@ -14,13 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,15 +35,14 @@ import rocks.urzahil.f1livetiming.ui.theme.F1Red
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
 import rocks.urzahil.f1livetiming.ui.theme.F1TextSecondary
+import rocks.urzahil.f1livetiming.ui.theme.TeamColors
 
 @Composable
 fun DriverTyreStintDialog(
     driver: ParsedDriverTiming,
     onDismiss: () -> Unit
 ) {
-    val teamColor = runCatching {
-        Color(android.graphics.Color.parseColor("#${driver.teamColorHex}"))
-    }.getOrDefault(F1Red)
+    val teamColor = TeamColors.parseHex(driver.teamColorHex) ?: F1Red
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -272,19 +267,6 @@ private fun TelemetryMiniCell(label: String, value: String) {
             color = F1TextPrimary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-    }
-}
-
-@Composable
-private fun SectorPill(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, color = F1TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        Text(
-            text = value,
-            color = F1TextSecondary,
-            fontSize = 11.sp,
             fontFamily = FontFamily.Monospace
         )
     }

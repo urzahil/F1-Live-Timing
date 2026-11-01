@@ -5,6 +5,8 @@ import rocks.urzahil.f1livetiming.data.api.NetworkClient
 import rocks.urzahil.f1livetiming.data.model.LiveStatusResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.text.SimpleDateFormat
@@ -22,7 +24,12 @@ data class ParsedSession(
     val totalLaps: Int = 0,
     val status: String = "NO ACTIVE SESSION",
     val isLive: Boolean = false,
-    val clock: ParsedSessionClock? = null
+    val clock: ParsedSessionClock? = null,
+    /**
+     * Official track condition from the feed's TrackStatus channel (or a red-flagged "Aborted" session).
+     * Null when the backend does not report it; the app then falls back to reading race control messages.
+     */
+    val trackStatus: TrackStatus? = null
 )
 
 /**
@@ -42,9 +49,7 @@ data class ParsedStint(
     val stintNumber: Int,
     val compound: String,
     val totalLaps: Int,
-    val isNew: Boolean,
-    val lapTime: String = "",
-    val lapNumber: Int = 0
+    val isNew: Boolean
 )
 
 data class ParsedDriverTiming(
@@ -176,9 +181,17 @@ class F1LiveRepository {
         }
     }
 
+    /**
+     * Returns the latest [limit] race control messages, newest first, and the track status derived from
+     * all of them. Accepts the backend's {"RaceControl": [...]} wrapper, the raw {"Messages": ...}
+     * channel shape, or a bare array.
+     */
     fun parseRaceControl(raw: String, limit: Int = 5): ParsedRaceControl {
         val all = parseAllRaceControlMessages(raw)
-        return ParsedRaceControl(all.takeLast(limit).reversed(), deriveTrackStatus(all))
+        // The whole history is replayed for the track status, but only the messages shown need their
+        // feed timestamp converted to a local time.
+        val latest = all.takeLast(limit).reversed().map { it.copy(time = formatRaceControlTime(it.time)) }
+        return ParsedRaceControl(latest, deriveTrackStatus(all))
     }
 
     /**
@@ -202,7 +215,7 @@ class F1LiveRepository {
                     "ENDING" in text -> TrackStatus.CLEAR
                     else -> status
                 }
-                m.flag == "RED" && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
+                (m.flag == "RED" || text.trim() == "RED FLAG") && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
                 trackWide && (m.flag == "CLEAR" || m.flag == "GREEN") -> TrackStatus.CLEAR
                 else -> status
             }
@@ -210,13 +223,7 @@ class F1LiveRepository {
         return status
     }
 
-    /**
-     * Returns the latest [limit] race control messages, newest first. Accepts the backend's
-     * {"RaceControl": [...]} wrapper, the raw {"Messages": ...} channel shape, or a bare array.
-     */
-    fun parseRaceControlJson(raw: String, limit: Int = 5): List<ParsedRaceControlMessage> =
-        parseAllRaceControlMessages(raw).takeLast(limit).reversed()
-
+    /** All messages, oldest first, with [ParsedRaceControlMessage.time] still holding the feed's UTC timestamp. */
     private fun parseAllRaceControlMessages(raw: String): List<ParsedRaceControlMessage> {
         if (raw.isBlank() || raw == "{}" || raw == "[]") return emptyList()
         return try {
@@ -231,7 +238,7 @@ class F1LiveRepository {
                 .mapNotNull { m ->
                     val text = m.optString("Message", "").trim()
                     if (text.isBlank()) null else ParsedRaceControlMessage(
-                        time = formatRaceControlTime(m.optString("Utc", "")),
+                        time = m.optString("Utc", ""),
                         category = m.optString("Category", "").trim(),
                         flag = m.optString("Flag", "").trim().uppercase(),
                         message = text,
@@ -250,6 +257,8 @@ class F1LiveRepository {
         return SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(millis))
     }
 
+    private val feedFractionPattern = Regex("""^\.(\d{1,3})""")
+
     /** Parses the feed's UTC timestamps ("2026-10-23T17:51:31", optional ".fff" and "Z") to epoch millis. */
     private fun parseFeedUtcMillis(utc: String): Long? {
         val trimmed = utc.trim()
@@ -259,10 +268,33 @@ class F1LiveRepository {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
             val seconds = parser.parse(trimmed.take(19))?.time ?: return null
-            val fraction = Regex("""^\.(\d{1,3})""").find(trimmed.substring(19))?.groupValues?.get(1)
+            val fraction = feedFractionPattern.find(trimmed.substring(19))?.groupValues?.get(1)
             seconds + (fraction?.padEnd(3, '0')?.toLong() ?: 0L)
         } catch (error: Exception) {
             null
+        }
+    }
+
+    /**
+     * Parses the feed's TrackStatus ({Status: "1".."7", Message}); null when absent or unknown. Yellow
+     * (status 2) is a local condition with no pill of its own, so it reads as clear, as does a VSC that is
+     * already ending (status 7), matching how the race control messages are read.
+     */
+    fun parseTrackStatus(trackStatus: JSONObject?): TrackStatus? {
+        if (trackStatus == null) return null
+        val byCode = when (trackStatus.optString("Status", "").trim()) {
+            "1", "2", "7" -> TrackStatus.CLEAR
+            "4" -> TrackStatus.SAFETY_CAR
+            "5" -> TrackStatus.RED_FLAG
+            "6" -> TrackStatus.VIRTUAL_SAFETY_CAR
+            else -> null
+        }
+        return byCode ?: when (trackStatus.optString("Message", "").trim().uppercase()) {
+            "ALLCLEAR", "YELLOW", "VSCENDING" -> TrackStatus.CLEAR
+            "SCDEPLOYED" -> TrackStatus.SAFETY_CAR
+            "RED" -> TrackStatus.RED_FLAG
+            "VSCDEPLOYED" -> TrackStatus.VIRTUAL_SAFETY_CAR
+            else -> null
         }
     }
 
@@ -288,34 +320,42 @@ class F1LiveRepository {
             val cachedAuxiliary = auxiliaryDataCache[cacheKey]
                 ?.takeIf { now - it.fetchedAt < AUXILIARY_DATA_TTL_MS }
 
-            val (tyresMap, standingsCatchingMap) = if (cachedAuxiliary != null) {
-                cachedAuxiliary.tyres to cachedAuxiliary.catching
-            } else {
-                val tyresResult = requestResult("tyres") {
-                    parseTyresJson(service.getTyresRaw().string())
-                }
-                val catchingResult = requestResult("standings-catching") {
-                    parseCatchingMap(service.getStandingsRaw().string())
-                }
-                val tyres = tyresResult.getOrDefault(emptyMap())
-                val catching = catchingResult.getOrDefault(emptyMap())
-                // Cache only when at least one auxiliary endpoint completed successfully.
-                if (tyresResult.isSuccess || catchingResult.isSuccess) {
-                    auxiliaryDataCache[cacheKey] = AuxiliaryData(tyres, catching, now)
-                }
-                tyres to catching
-            }
+            coroutineScope {
+                // The leaderboard and, when they are not cached, the tyre and standings feeds are
+                // independent requests, so they run side by side rather than one after another.
+                val leaderboardRaw = async { requestResult("leaderboard") { service.getLeaderboardRaw().string() } }
+                val tyresRaw = if (cachedAuxiliary == null) {
+                    async { requestResult("tyres") { service.getTyresRaw().string() } }
+                } else null
+                val standingsRaw = if (cachedAuxiliary == null) {
+                    async { requestResult("standings") { service.getStandingsRaw().string() } }
+                } else null
 
-            val leaderboardResult = requestResult("leaderboard") {
-                parseStandingsJson(service.getLeaderboardRaw().string(), tyresMap, standingsCatchingMap)
-            }
-            val leaderboard = leaderboardResult.getOrNull()
-            if (!leaderboard.isNullOrEmpty()) {
-                leaderboard
-            } else {
-                requestResult("standings-fallback") {
-                    parseStandingsJson(service.getStandingsRaw().string(), tyresMap, standingsCatchingMap)
-                }.getOrThrow()
+                val auxiliary = cachedAuxiliary ?: run {
+                    val tyresResult = tyresRaw!!.await()
+                    val standingsResult = standingsRaw!!.await()
+                    val fetched = AuxiliaryData(
+                        tyres = tyresResult.map { parseTyresJson(it) }.getOrDefault(emptyMap()),
+                        catching = standingsResult.map { parseCatchingMap(it) }.getOrDefault(emptyMap()),
+                        fetchedAt = now
+                    )
+                    // Cache only when at least one auxiliary endpoint completed successfully.
+                    if (tyresResult.isSuccess || standingsResult.isSuccess) {
+                        auxiliaryDataCache[cacheKey] = fetched
+                    }
+                    fetched
+                }
+
+                val leaderboard = leaderboardRaw.await().getOrNull()
+                    ?.let { parseStandingsJson(it, auxiliary.tyres, auxiliary.catching) }
+                if (!leaderboard.isNullOrEmpty()) {
+                    leaderboard
+                } else {
+                    // Reuse the standings fetched above for the catching flags when there is a copy.
+                    val standings = standingsRaw?.await()?.takeIf { it.isSuccess }
+                        ?: requestResult("standings-fallback") { service.getStandingsRaw().string() }
+                    parseStandingsJson(standings.getOrThrow(), auxiliary.tyres, auxiliary.catching)
+                }
             }
         }
     }
@@ -351,35 +391,24 @@ class F1LiveRepository {
     }
 
     fun parseSessionJson(raw: String): ParsedSession {
-        if (raw.isBlank() || raw == "{}" || raw == "[]") {
-            return ParsedSession(
-                meetingName = "",
-                sessionName = "",
-                sessionType = "",
-                currentLap = 0,
-                totalLaps = 0,
-                status = "NO ACTIVE SESSION",
-                isLive = false
-            )
-        }
+        if (raw.isBlank() || raw == "{}" || raw == "[]") return ParsedSession()
         return try {
             val json = JSONObject(raw)
             val sessionRoot = json.optJSONObject("Session") ?: json
 
             val meetingObj = sessionRoot.optJSONObject("Meeting") ?: json.optJSONObject("Meeting")
-            val meetingName = meetingObj?.optString("Name")
-                ?: meetingObj?.optString("OfficialName")
-                ?: json.optString("MeetingName", "")
+            // optString returns "" (never null) for a missing key, so each fallback is taken with ifBlank.
+            val meetingName = meetingObj?.optString("Name").orEmpty()
+                .ifBlank { meetingObj?.optString("OfficialName").orEmpty() }
+                .ifBlank { json.optString("MeetingName", "") }
 
             val sessionObj = sessionRoot.optJSONObject("Session")
-            val sessionName = sessionObj?.optString("Name")
-                ?: sessionRoot.optString("Name").ifBlank {
-                    sessionRoot.optString("SessionName", json.optString("SessionName", ""))
-                }
-            val sessionType = sessionObj?.optString("Type")
-                ?: sessionRoot.optString("Type").ifBlank {
-                    sessionRoot.optString("SessionType", json.optString("SessionType", ""))
-                }
+            val sessionName = sessionObj?.optString("Name").orEmpty()
+                .ifBlank { sessionRoot.optString("Name") }
+                .ifBlank { sessionRoot.optString("SessionName", json.optString("SessionName", "")) }
+            val sessionType = sessionObj?.optString("Type").orEmpty()
+                .ifBlank { sessionRoot.optString("Type") }
+                .ifBlank { sessionRoot.optString("SessionType", json.optString("SessionType", "")) }
 
             val lapCountObj = json.optJSONObject("LapCount") ?: sessionRoot.optJSONObject("LapCount")
             val currentLap = lapCountObj?.optInt("CurrentLap", 0)
@@ -391,7 +420,9 @@ class F1LiveRepository {
                 sessionRoot.optString("Status", json.optString("Status", ""))
             }
 
-            val isStarted = rawStatus.equals("Started", ignoreCase = true) ||
+            // The feed reports a red-flagged session as "Aborted"; it is still running and resumes later.
+            val isAborted = rawStatus.equals("Aborted", ignoreCase = true)
+            val isStarted = isAborted || rawStatus.equals("Started", ignoreCase = true) ||
                     rawStatus.equals("Active", ignoreCase = true) ||
                     rawStatus.equals("Live", ignoreCase = true)
 
@@ -418,7 +449,9 @@ class F1LiveRepository {
                 totalLaps = totalLaps,
                 status = displayStatus,
                 isLive = isLive,
-                clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock"))
+                clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock")),
+                trackStatus = parseTrackStatus(json.optJSONObject("TrackStatus"))
+                    ?: if (isAborted) TrackStatus.RED_FLAG else null
             )
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")
@@ -466,16 +499,12 @@ class F1LiveRepository {
                 is Number -> newRaw.toInt() != 0
                 else -> false
             }
-            val lapTime = sObj.optString("LapTime", "").trim()
-            val lapNumber = sObj.optInt("LapNumber", 0)
             stintsList.add(
                 ParsedStint(
                     stintNumber = i + 1,
                     compound = compound,
                     totalLaps = totalLaps,
-                    isNew = isNew,
-                    lapTime = lapTime,
-                    lapNumber = lapNumber
+                    isNew = isNew
                 )
             )
         }

@@ -11,12 +11,4 @@ internal class CalendarResultsCache {
     val sprint = ExpiringListCache<String, RaceResultItem>()
     val sprintQualifying = ExpiringListCache<String, QualifyingResultItem>()
     val practice = ExpiringListCache<String, PracticeTimingItem>()
-
-    fun clear() {
-        race.clear()
-        qualifying.clear()
-        sprint.clear()
-        sprintQualifying.clear()
-        practice.clear()
-    }
 }

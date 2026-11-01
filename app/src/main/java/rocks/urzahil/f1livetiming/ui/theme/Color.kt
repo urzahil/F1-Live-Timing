@@ -16,6 +16,9 @@ val F1TextPrimary = Color(0xFFFFFFFF)
 val F1TextSecondary = Color(0xFF909EAF)
 val F1TextMuted = Color(0xFF5F6C7D)
 
+// Leaders, winners and points
+val F1Gold = Color(0xFFFFD700)
+
 // Pirelli Tyre Compound Official Colors
 val TyreSoft = Color(0xFFFF1801)
 val TyreMedium = Color(0xFFFFD800)
@@ -23,11 +26,6 @@ val TyreHard = Color(0xFFF0F0F0)
 val TyreIntermediate = Color(0xFF39B54A)
 val TyreWet = Color(0xFF0070FF)
 val TyreUnknown = Color(0xFF757575)
-
-// Telemetry Sector Delta Colors
-val SectorOverallBest = Color(0xFF9B51E0) // Purple
-val SectorPersonalBest = Color(0xFF27AE60) // Green
-val SectorNoImprovement = Color(0xFFF2994A) // Yellow
 
 // Track Status Flags
 val FlagGreen = Color(0xFF2ECC71)

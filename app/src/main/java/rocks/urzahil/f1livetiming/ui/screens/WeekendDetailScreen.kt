@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,11 +51,11 @@ import rocks.urzahil.f1livetiming.data.model.getAllSessions
 import rocks.urzahil.f1livetiming.ui.theme.F1CarbonBackground
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
+import rocks.urzahil.f1livetiming.ui.theme.F1Gold
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1Red
 import rocks.urzahil.f1livetiming.ui.theme.F1TextPrimary
 import rocks.urzahil.f1livetiming.ui.theme.F1TextSecondary
-import java.util.Calendar
 
 @Composable
 internal fun GrandPrixWeekendDetailScreen(
@@ -72,7 +73,7 @@ internal fun GrandPrixWeekendDetailScreen(
     onRetryResults: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val sessions = race.getAllSessions()
+    val sessions = remember(race) { race.getAllSessions() }
 
     Column(
         modifier = modifier
@@ -174,77 +175,68 @@ internal fun GrandPrixWeekendDetailScreen(
                     }
                 }
             } else {
-                val sessionSchedule = when (selectedSessionType) {
-                WeekendSessionType.RACE -> Pair(race.date, race.time)
-                WeekendSessionType.QUALIFYING -> Pair(race.qualifying?.date, race.qualifying?.time)
-                WeekendSessionType.SPRINT -> Pair(race.sprint?.date, race.sprint?.time)
-                WeekendSessionType.SPRINT_QUALIFYING -> Pair(race.sprintQualifying?.date ?: race.sprintShootout?.date, race.sprintQualifying?.time ?: race.sprintShootout?.time)
-                WeekendSessionType.FP1 -> Pair(race.firstPractice?.date, race.firstPractice?.time)
-                WeekendSessionType.FP2 -> Pair(race.secondPractice?.date, race.secondPractice?.time)
-                WeekendSessionType.FP3 -> Pair(race.thirdPractice?.date, race.thirdPractice?.time)
-            }
-            val isFutureOrTodaySession = isDateInFutureOrToday(sessionSchedule.first ?: race.date)
+                val isFutureOrTodaySession = isDateInFutureOrToday(race.scheduleOf(selectedSessionType).first ?: race.date)
 
-            if (resultsError != null && !isFutureOrTodaySession) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "Unable to load session data", color = F1TextPrimary, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = resultsError, color = F1TextSecondary, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(onClick = onRetryResults, colors = ButtonDefaults.buttonColors(containerColor = F1Red)) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Retry")
+                if (resultsError != null && !isFutureOrTodaySession) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Unable to load session data", color = F1TextPrimary, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = resultsError, color = F1TextSecondary, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(onClick = onRetryResults, colors = ButtonDefaults.buttonColors(containerColor = F1Red)) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry")
+                            }
                         }
                     }
-                }
-            } else {
-                when (selectedSessionType) {
-                    WeekendSessionType.QUALIFYING -> {
-                        if (qualifyingResults.isNotEmpty()) {
-                            QualifyingResultsView(results = qualifyingResults, isSprintQualifying = false)
-                        } else {
-                            SessionNotRunView(sessionTitle = "Qualifying", race = race, sessionType = selectedSessionType)
+                } else {
+                    when (selectedSessionType) {
+                        WeekendSessionType.QUALIFYING -> {
+                            if (qualifyingResults.isNotEmpty()) {
+                                QualifyingResultsView(results = qualifyingResults, isSprintQualifying = false)
+                            } else {
+                                SessionNotRunView(sessionTitle = "Qualifying", race = race, sessionType = selectedSessionType)
+                            }
                         }
-                    }
-                    WeekendSessionType.RACE -> {
-                        if (raceResults.isNotEmpty()) {
-                            RaceResultsView(results = raceResults, isSprint = false)
-                        } else {
-                            SessionNotRunView(sessionTitle = "Grand Prix Race", race = race, sessionType = selectedSessionType)
+                        WeekendSessionType.RACE -> {
+                            if (raceResults.isNotEmpty()) {
+                                RaceResultsView(results = raceResults, isSprint = false)
+                            } else {
+                                SessionNotRunView(sessionTitle = "Grand Prix Race", race = race, sessionType = selectedSessionType)
+                            }
                         }
-                    }
-                    WeekendSessionType.SPRINT -> {
-                        if (sprintResults.isNotEmpty()) {
-                            RaceResultsView(results = sprintResults, isSprint = true)
-                        } else {
-                            SessionNotRunView(sessionTitle = "Sprint Race", race = race, sessionType = selectedSessionType)
+                        WeekendSessionType.SPRINT -> {
+                            if (sprintResults.isNotEmpty()) {
+                                RaceResultsView(results = sprintResults, isSprint = true)
+                            } else {
+                                SessionNotRunView(sessionTitle = "Sprint Race", race = race, sessionType = selectedSessionType)
+                            }
                         }
-                    }
-                    WeekendSessionType.SPRINT_QUALIFYING -> {
-                        val hasValidSqTimes = sprintQualifyingResults.any { !it.q1.isNullOrBlank() || !it.q2.isNullOrBlank() || !it.q3.isNullOrBlank() }
-                        if (sprintQualifyingResults.isNotEmpty() && hasValidSqTimes) {
-                            QualifyingResultsView(results = sprintQualifyingResults, isSprintQualifying = true)
-                        } else {
-                            SessionNotRunView(sessionTitle = "Sprint Qualifying", race = race, sessionType = selectedSessionType)
+                        WeekendSessionType.SPRINT_QUALIFYING -> {
+                            val hasValidSqTimes = sprintQualifyingResults.any { !it.q1.isNullOrBlank() || !it.q2.isNullOrBlank() || !it.q3.isNullOrBlank() }
+                            if (sprintQualifyingResults.isNotEmpty() && hasValidSqTimes) {
+                                QualifyingResultsView(results = sprintQualifyingResults, isSprintQualifying = true)
+                            } else {
+                                SessionNotRunView(sessionTitle = "Sprint Qualifying", race = race, sessionType = selectedSessionType)
+                            }
                         }
-                    }
-                    WeekendSessionType.FP1,
-                    WeekendSessionType.FP2,
-                    WeekendSessionType.FP3 -> {
-                        val hasValidPractice = practiceTimings.any { it.bestLapTime != "--" && it.bestLapTime.isNotBlank() }
-                        if (practiceTimings.isNotEmpty() && hasValidPractice) {
-                            PracticeTimingsView(timings = practiceTimings, sessionType = selectedSessionType, race = race)
-                        } else {
-                            SessionNotRunView(sessionTitle = selectedSessionType.title, race = race, sessionType = selectedSessionType)
+                        WeekendSessionType.FP1,
+                        WeekendSessionType.FP2,
+                        WeekendSessionType.FP3 -> {
+                            val hasValidPractice = practiceTimings.any { it.bestLapTime != "--" && it.bestLapTime.isNotBlank() }
+                            if (practiceTimings.isNotEmpty() && hasValidPractice) {
+                                PracticeTimingsView(timings = practiceTimings)
+                            } else {
+                                SessionNotRunView(sessionTitle = selectedSessionType.title, race = race, sessionType = selectedSessionType)
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
@@ -284,12 +276,7 @@ internal fun WeekendSessionPill(
             Triple(F1Red.copy(alpha = 0.35f), Color(0xFFFF5252), Color.White)
     }
 
-    val badgeLabel = when (session.type) {
-        WeekendSessionType.QUALIFYING -> "QUAL"
-        WeekendSessionType.SPRINT_QUALIFYING -> "SQ"
-        WeekendSessionType.SPRINT -> "SPRINT"
-        else -> session.type.shortBadge
-    }
+    val badgeLabel = session.type.shortBadge
 
     val containerBg = if (isSelected) activeBg else badgeBg
     val containerBorderColor = if (isSelected) activeBorder else badgeBorder
@@ -380,21 +367,24 @@ internal fun WeekendSessionPill(
     }
 }
 
+/** Scheduled UTC (date, time) of [type] on this weekend; nulls when the calendar does not list it. */
+private fun SeasonRaceItem.scheduleOf(type: WeekendSessionType): Pair<String?, String?> = when (type) {
+    WeekendSessionType.RACE -> date to time
+    WeekendSessionType.QUALIFYING -> qualifying?.date to qualifying?.time
+    WeekendSessionType.SPRINT -> sprint?.date to sprint?.time
+    WeekendSessionType.SPRINT_QUALIFYING -> (sprintQualifying ?: sprintShootout).let { it?.date to it?.time }
+    WeekendSessionType.FP1 -> firstPractice?.date to firstPractice?.time
+    WeekendSessionType.FP2 -> secondPractice?.date to secondPractice?.time
+    WeekendSessionType.FP3 -> thirdPractice?.date to thirdPractice?.time
+}
+
 @Composable
 internal fun SessionNotRunView(
     sessionTitle: String,
     race: SeasonRaceItem,
     sessionType: WeekendSessionType
 ) {
-    val sessionSchedule = when (sessionType) {
-        WeekendSessionType.RACE -> Pair(race.date, race.time)
-        WeekendSessionType.QUALIFYING -> Pair(race.qualifying?.date, race.qualifying?.time)
-        WeekendSessionType.SPRINT -> Pair(race.sprint?.date, race.sprint?.time)
-        WeekendSessionType.SPRINT_QUALIFYING -> Pair(race.sprintQualifying?.date ?: race.sprintShootout?.date, race.sprintQualifying?.time ?: race.sprintShootout?.time)
-        WeekendSessionType.FP1 -> Pair(race.firstPractice?.date, race.firstPractice?.time)
-        WeekendSessionType.FP2 -> Pair(race.secondPractice?.date, race.secondPractice?.time)
-        WeekendSessionType.FP3 -> Pair(race.thirdPractice?.date, race.thirdPractice?.time)
-    }
+    val sessionSchedule = race.scheduleOf(sessionType)
 
     val (localDate, localTime) = formatUtcToLocal(sessionSchedule.first, sessionSchedule.second)
     // A session that has started but has no results yet is waiting on the results provider, not "not completed".
@@ -442,7 +432,7 @@ internal fun SessionNotRunView(
             if (!hasStarted) {
                 Text(
                     text = "Scheduled for: $localDate · $localTime",
-                    color = ColorxFFFFD700,
+                    color = F1Gold,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold

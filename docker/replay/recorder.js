@@ -96,6 +96,9 @@ class Recorder {
     constructor(dir) {
         this.dir = dir;
         this.current = null;
+        // A recording left behind by a container stop, held until the first snapshot says whether the same
+        // session is still on (it is then continued) or a different one has started (it is then closed).
+        this.leftover = null;
         try {
             fs.mkdirSync(dir, { recursive: true });
             this.recoverLeftover();
@@ -191,7 +194,8 @@ class Recorder {
 
     /**
      * @description Records a subscribe result. A snapshot for a different session key closes the previous
-     * recording and starts a new one; a snapshot for the same key (a reconnect) continues the current one.
+     * recording and starts a new one; a snapshot for the same key (a reconnect, or the container restarting
+     * mid-session) continues the current one.
      * @param {Object} result - Subscribe completion result (full feed state).
      */
     recordSnapshot(result) {
@@ -199,6 +203,12 @@ class Recorder {
         try {
             const info = result.SessionInfo;
             const key = info && info.Key;
+            if (!this.current && this.leftover) {
+                const leftover = this.leftover;
+                this.leftover = null;
+                if (key !== undefined && key === leftover.header.key) this.resume(leftover);
+                else this.promote(leftover.header, leftover.stats);
+            }
             if (!this.current || (key !== undefined && key !== this.current.header.key)) {
                 this.finalize();
                 this.begin(info);
@@ -247,6 +257,26 @@ class Recorder {
         fs.writeSync(fd, `${JSON.stringify(header)}\n`);
         this.current = { fd, header, startedMs: Date.now(), stats: newStats(), checkpointed: 0, ended: sessionEndedLongAgo(info) };
         console.log(`[Recorder] Recording ${slot} (${header.meeting} - ${header.name}, key ${header.key})`);
+    }
+
+    /**
+     * @description Continues a recording left behind by a container stop, appending to the same file. The
+     * time the container was down is left out of the timeline so a replay does not sit idle through it.
+     * @param {{header: Object, stats: Object, lastT: number}} leftover - The recording found at startup.
+     */
+    resume(leftover) {
+        const fd = fs.openSync(this.currentPath, 'a');
+        const resumeT = leftover.lastT + 1000;
+        this.current = {
+            fd,
+            header: leftover.header,
+            startedMs: Date.now() - resumeT,
+            stats: leftover.stats,
+            checkpointed: 0,
+            ended: false
+        };
+        const { slot, meeting, name, key } = leftover.header;
+        console.log(`[Recorder] Resuming ${slot} recording after a restart (${meeting} - ${name}, key ${key})`);
     }
 
     write(kind, channel, data) {
@@ -360,19 +390,31 @@ class Recorder {
     }
 
     /**
-     * @description Promotes a recording left behind by a container stop mid-session.
+     * @description Picks up a recording left behind by a container stop mid-session. A copy is saved right
+     * away so it is replayable even if the feed never comes back; the file itself is kept so the first
+     * snapshot can continue it when the same session is still running.
      */
     recoverLeftover() {
         if (!fs.existsSync(this.currentPath)) return;
         try {
-            const lines = fs.readFileSync(this.currentPath, 'utf-8').split('\n').filter((line) => line.length > 0);
+            let text = fs.readFileSync(this.currentPath, 'utf-8');
+            // Drop a last line cut short by the stop, so appending after it cannot corrupt the next line.
+            const end = text.lastIndexOf('\n') + 1;
+            if (end < text.length) {
+                fs.truncateSync(this.currentPath, Buffer.byteLength(text.slice(0, end)));
+                text = text.slice(0, end);
+            }
+            const lines = text.split('\n').filter((line) => line.length > 0);
             const header = JSON.parse(lines[0]);
             const stats = newStats();
+            let lastT = 0;
             for (let i = 1; i < lines.length; i++) {
                 try {
                     const { t, body } = splitLine(lines[i]);
+                    if (!Number.isFinite(t)) continue;
                     stats.messages++;
                     stats.durationMs = t;
+                    lastT = t;
                     if (body.includes('LapCount')) {
                         const rec = JSON.parse(body);
                         noteLaps(stats, rec.k === 's' ? rec.d.LapCount : rec.c === 'LapCount' ? parsePayload(rec.d) : null);
@@ -381,7 +423,8 @@ class Recorder {
                     // A line cut short by the stop is dropped.
                 }
             }
-            this.promote(header, stats);
+            this.promote(header, { ...stats }, true);
+            this.leftover = { header, stats, lastT };
         } catch (err) {
             console.error('[Recorder] Could not recover unfinished recording:', err.message);
             try {

@@ -1,38 +1,38 @@
 diff --git a/src/f1-client.js b/src/f1-client.js
-index 87e6a3f..589ed0b 100644
+index 8e68c60..c56a597 100644
 --- a/src/f1-client.js
 +++ b/src/f1-client.js
-@@ -27,7 +27,8 @@ const SUBSCRIBE_CHANNELS = [
-     'RaceControlMessages',
+@@ -28,7 +28,8 @@ const SUBSCRIBE_CHANNELS = [
      'LapCount',
      'TeamRadio',
--    'ExtrapolatedClock'
-+    'ExtrapolatedClock',
+     'ExtrapolatedClock',
+-    'TrackStatus'
++    'TrackStatus',
 +    'PitLaneTimeCollection'
  ];
  
  class F1LiveClient {
-@@ -62,6 +63,9 @@ class F1LiveClient {
-         this.raceControl = [];
+@@ -64,6 +65,9 @@ class F1LiveClient {
          this.teamRadio = [];
          this.extrapolatedClock = {};
+         this.trackStatus = {};
 +        this.pitLaneTimes = {};
 +        // Completed stops outlive the feed's short-lived entries and a reconnect snapshot; only a replay resets them.
 +        if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
      }
  
      /**
-@@ -282,6 +286,7 @@ class F1LiveClient {
-         if (result.LapCount) this.routeData('LapCount', result.LapCount);
+@@ -285,6 +289,7 @@ class F1LiveClient {
          if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
          if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
+         if (result.TrackStatus) this.routeData('TrackStatus', result.TrackStatus);
 +        if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
      }
  
      /**
-@@ -354,6 +359,29 @@ class F1LiveClient {
-                 deepMerge(this.extrapolatedClock, data);
-                 this.broadcast({ type: 'ExtrapolatedClock', data: this.extrapolatedClock });
+@@ -363,6 +368,29 @@ class F1LiveClient {
+                 deepMerge(this.trackStatus, data);
+                 this.broadcast({ type: 'TrackStatus', data: this.trackStatus });
                  break;
 +            case 'PitLaneTimeCollection':
 +                // { PitTimes: { "<racing number>": { RacingNumber, Duration, Lap } } } — pit lane durations as the
@@ -60,8 +60,8 @@ index 87e6a3f..589ed0b 100644
          }
      }
  
-@@ -394,6 +422,16 @@ class F1LiveClient {
-         return this.extrapolatedClock;
+@@ -407,6 +435,16 @@ class F1LiveClient {
+         return this.trackStatus;
      }
  
 +    getPitStops() {
@@ -78,10 +78,10 @@ index 87e6a3f..589ed0b 100644
          return {
              isConnected: this.isConnected || this.replaying,
 diff --git a/src/routes/session.js b/src/routes/session.js
-index 41aa379..c24ff59 100644
+index f82a47a..77ccdde 100644
 --- a/src/routes/session.js
 +++ b/src/routes/session.js
-@@ -93,6 +93,21 @@ function createSessionRouter(f1Client) {
+@@ -94,6 +94,21 @@ function createSessionRouter(f1Client) {
      router.get('/radio', getRadioHandler);
      router.get('/team-radio', getRadioHandler);
  

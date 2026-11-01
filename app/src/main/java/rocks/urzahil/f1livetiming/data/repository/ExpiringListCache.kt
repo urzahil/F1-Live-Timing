@@ -27,14 +27,6 @@ internal class ExpiringListCache<K, V>(
         }
     }
 
-    fun invalidate(key: K) {
-        entries.remove(key)
-    }
-
-    fun clear() {
-        entries.clear()
-    }
-
     companion object {
         const val DEFAULT_TTL_MILLIS = 10 * 60 * 1000L
     }

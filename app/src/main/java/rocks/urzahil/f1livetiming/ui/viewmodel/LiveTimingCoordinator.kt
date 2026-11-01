@@ -6,6 +6,8 @@ import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
 import rocks.urzahil.f1livetiming.data.repository.ParsedSession
 import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
 import rocks.urzahil.f1livetiming.data.repository.TrackStatus
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 internal data class LiveTimingSnapshot(
     val session: ParsedSession = ParsedSession(),
@@ -13,7 +15,6 @@ internal data class LiveTimingSnapshot(
     val timings: List<ParsedDriverTiming> = emptyList(),
     val raceControl: List<ParsedRaceControlMessage> = emptyList(),
     val trackStatus: TrackStatus = TrackStatus.CLEAR,
-    val status: String = "Waiting for the first refresh",
     val error: String? = null
 )
 
@@ -32,20 +33,19 @@ internal class LiveTimingCoordinator(
     private var lastTimingsFetchAt = 0L
     private var lastSessionSuccessAt = 0L
     private var finalTimingFetchSessionKey: String? = null
+    private var raceControlTrackStatus = TrackStatus.CLEAR
 
     fun resetForBackendChange() {
         lastWeatherFetchAt = 0L
         lastTimingsFetchAt = 0L
         lastSessionSuccessAt = 0L
         finalTimingFetchSessionKey = null
-        snapshot = snapshot.copy(status = "Backend changed — refreshing data", error = null)
+        snapshot = snapshot.copy(error = null)
     }
 
     suspend fun refresh(baseUrl: String, force: Boolean, showLatestSession: Boolean): LiveTimingSnapshot {
         val currentUrl = baseUrl.trim()
-        if (currentUrl.isBlank()) {
-            return snapshot.copy(status = "Backend URL is not configured")
-        }
+        if (currentUrl.isBlank()) return snapshot
 
         val now = clock()
         var stale = false
@@ -68,7 +68,10 @@ internal class LiveTimingCoordinator(
                     lastTimingsFetchAt = 0L
                     finalTimingFetchSessionKey = null
                 }
-                if (sessionChanged) snapshot = snapshot.copy(raceControl = emptyList(), trackStatus = TrackStatus.CLEAR)
+                if (sessionChanged) {
+                    snapshot = snapshot.copy(raceControl = emptyList())
+                    raceControlTrackStatus = TrackStatus.CLEAR
+                }
                 snapshot = snapshot.copy(session = parsed)
                 lastSessionSuccessAt = now
             }
@@ -94,15 +97,22 @@ internal class LiveTimingCoordinator(
             finalFetchedSessionKey = finalTimingFetchSessionKey
         )
 
-        if (fetchWeather) {
-            repository.fetchWeather(currentUrl).onSuccess { weather ->
-                snapshot = snapshot.copy(weather = weather)
-                lastWeatherFetchAt = now
-            }.onFailure { stale = true }
+        // Weather, timings and race control do not depend on each other, so they are requested together;
+        // the results are then applied one after another below.
+        val (weatherResult, timingsResult, raceControlResult) = coroutineScope {
+            val weather = if (fetchWeather) async { repository.fetchWeather(currentUrl) } else null
+            val timings = if (fetchTimings) async { repository.fetchLiveTimings(currentUrl) } else null
+            val raceControl = if (fetchTimings) async { repository.fetchRaceControl(currentUrl) } else null
+            Triple(weather?.await(), timings?.await(), raceControl?.await())
         }
 
-        if (fetchTimings) {
-            repository.fetchLiveTimings(currentUrl).onSuccess { timings ->
+        weatherResult?.onSuccess { weather ->
+            snapshot = snapshot.copy(weather = weather)
+            lastWeatherFetchAt = now
+        }?.onFailure { stale = true }
+
+        if (timingsResult != null) {
+            timingsResult.onSuccess { timings ->
                 if (timings.isNotEmpty()) {
                     snapshot = snapshot.copy(timings = timings)
                     lastTimingsFetchAt = now
@@ -116,24 +126,24 @@ internal class LiveTimingCoordinator(
 
             // Supplementary to the leaderboard: a failed fetch keeps the last list without marking
             // the whole snapshot stale.
-            repository.fetchRaceControl(currentUrl).onSuccess { result ->
-                snapshot = snapshot.copy(raceControl = result.messages, trackStatus = result.trackStatus)
+            raceControlResult?.onSuccess { result ->
+                snapshot = snapshot.copy(raceControl = result.messages)
+                raceControlTrackStatus = result.trackStatus
             }
         }
 
         val hasAnyData = hasIdentity || snapshot.timings.isNotEmpty() || snapshot.weather != ParsedWeather()
-        val status = when {
-            stale && hasAnyData -> "Showing last successful data — some information may be stale"
-            stale -> "Unable to refresh live data"
-            hasAnyData -> "Data updated"
-            else -> "No active session"
-        }
         val error = when {
             stale && hasAnyData -> "Showing last successful data - the latest refresh was incomplete."
             stale -> "Unable to refresh live data. Check the backend connection."
             else -> null
         }
-        snapshot = snapshot.copy(status = status, error = error)
+        // The feed's own track status is authoritative; race control messages are only a fallback for
+        // backends that do not report it.
+        snapshot = snapshot.copy(
+            error = error,
+            trackStatus = snapshot.session.trackStatus ?: raceControlTrackStatus
+        )
         return snapshot
     }
 

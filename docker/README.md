@@ -33,10 +33,12 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
 2. **`02-extrapolated-clock.patch`** subscribes to F1's session clock (`ExtrapolatedClock`) and returns it from `/api/session`.
 3. **`03-record-replay.patch`** wires session recording and replay into the client and server (the code itself is in [`docker/replay/`](docker/replay/)):
    - The container records the raw feed of each live session and keeps the latest recording per session type (practice, qualifying, sprint qualifying, race, sprint) in a Docker volume
+   - If the container restarts or is rebuilt mid-session, the recording carries on in the same file when the feed comes back, so the replay covers the whole session apart from the time the container was down
    - A token-protected control page at `http://<host>:3000/replay` plays a recording back through the normal handlers, so every `/api/*` endpoint answers as it does live. This lets you test the app between race weekends, with adjustable speed and a starting lap
    - Replay is disabled until you set `REPLAY_TOKEN` in `docker/.env`
 4. **`04-fia-documents.patch`** mounts `GET /api/documents`, which lists the FIA decision documents of a grand prix (the code is in [`docker/fia-docs/`](fia-docs/)). See [FIA Documents](#fia-documents) below.
-5. **`05-pit-lane-times.patch`** subscribes to F1's `PitLaneTimeCollection` channel and returns it from `GET /api/pitstops`:
+5. **`05-track-status.patch`** subscribes to F1's official track status (`TrackStatus`: green, yellow, safety car, VSC, red flag) and returns it from `/api/session`, so the app's header pill follows the real flag state instead of guessing it from race control messages.
+6. **`06-pit-lane-times.patch`** subscribes to F1's `PitLaneTimeCollection` channel and returns it from `GET /api/pitstops`:
    ```json
    {
      "PitTimes": { "16": { "RacingNumber": "16", "Duration": "29.1", "Lap": "7" } },
@@ -45,9 +47,9 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    ```
    - `PitTimes` is what the feed currently shows. An entry appears as a car enters the pit lane, gets its `Duration` (seconds, `""` until then) when it leaves, and is removed about 30 s later, so it is usually empty. A new connection always starts from that short-lived view.
    - `PitStops` is every completed stop of the session per driver, with the lap and the pit lane time in seconds. It survives the feed removing entries and a reconnect, and starts again when the session changes. Stops made while the backend was not connected are not in it.
-6. **`06-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 05.
-7. **`07-session-data.patch`** subscribes to `SessionData` and returns it from `GET /api/session-data` as `{"SessionData": {"Series": [{"Utc", "Lap"}], ...}}`: the start time of each lap, plus the status history if the feed sends it. Applies on top of 06.
-8. **`08-pitstop-series.patch`** subscribes to `PitStopSeries` and returns it exactly as the feed sends it from `GET /api/pitstop-series`. The channel is not confirmed to exist or to hold stationary pit stop times; subscribing means recordings made from now on contain it, so it can be inspected by replay. Remove the patch if it turns out to be empty. Applies on top of 07.
+7. **`07-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 07.
+8. **`08-session-data.patch`** subscribes to `SessionData` and returns it from `GET /api/session-data` as `{"SessionData": {"Series": [{"Utc", "Lap"}], ...}}`: the start time of each lap, plus the status history if the feed sends it. Applies on top of 06.
+9. **`09-pitstop-series.patch`** subscribes to `PitStopSeries` and returns it exactly as the feed sends it from `GET /api/pitstop-series`. The channel is not confirmed to exist or to hold stationary pit stop times; subscribing means recordings made from now on contain it, so it can be inspected by replay. Remove the patch if it turns out to be empty. Applies on top of 07.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 

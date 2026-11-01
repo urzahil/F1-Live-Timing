@@ -1,9 +1,7 @@
 package rocks.urzahil.f1livetiming.ui.viewmodel
 
 import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import rocks.urzahil.f1livetiming.data.model.scheduleUtcMillis
 
 /** Grands Prix and sprints of the season whose points are not yet in the standings. */
 data class RemainingSessions(val races: Int, val sprints: Int) {
@@ -90,17 +88,6 @@ object ChampionshipPredictor {
         return leader.takeIf { contenders.count { it.inContention } == 1 }
     }
 
-    private fun hasStarted(dateStr: String?, timeStr: String?, nowMillis: Long): Boolean {
-        if (dateStr.isNullOrBlank()) return false
-        val time = timeStr?.replace("Z", "")?.trim().takeUnless { it.isNullOrBlank() }
-            ?.let { if (it.length == 5) "$it:00" else it } ?: "00:00:00"
-        return try {
-            val start = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }.parse("${dateStr.trim()}T$time") ?: return false
-            start.time <= nowMillis
-        } catch (_: Exception) {
-            false
-        }
-    }
+    private fun hasStarted(dateStr: String?, timeStr: String?, nowMillis: Long): Boolean =
+        scheduleUtcMillis(dateStr, timeStr)?.let { it <= nowMillis } ?: false
 }

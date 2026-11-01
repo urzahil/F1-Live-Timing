@@ -16,11 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,11 +45,11 @@ fun FlagIndicator(
         else -> Pair(inactiveGrey, upper.ifBlank { "SESSION STARTED" })
     }
 
-    // Only red flag and safety car states pulse.
+    // Only red flag and safety car states pulse. Other states run no animation at all, so the pill does
+    // not keep requesting frames, and the pulse is read in the layer so it redraws without recomposing.
     val isAlert = flagColor == FlagRed || flagColor == FlagSafetyCar
-    val infiniteTransition = rememberInfiniteTransition(label = "flag_pulse")
-    val alphaAnim by if (isAlert) {
-        infiniteTransition.animateFloat(
+    val pulse = if (isAlert) {
+        rememberInfiniteTransition(label = "flag_pulse").animateFloat(
             initialValue = 1.0f,
             targetValue = 0.4f,
             animationSpec = infiniteRepeatable(
@@ -60,17 +59,12 @@ fun FlagIndicator(
             label = "pulse"
         )
     } else {
-        rememberInfiniteTransition(label = "steady").animateFloat(
-            initialValue = 1.0f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(tween(1000)),
-            label = "steady"
-        )
+        null
     }
 
     Row(
         modifier = modifier
-            .alpha(alphaAnim)
+            .graphicsLayer { alpha = pulse?.value ?: 1f }
             .background(flagColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically

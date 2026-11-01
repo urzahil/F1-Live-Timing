@@ -1,0 +1,77 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 87e6a3f..8e68c60 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -27,7 +27,8 @@ const SUBSCRIBE_CHANNELS = [
+     'RaceControlMessages',
+     'LapCount',
+     'TeamRadio',
+-    'ExtrapolatedClock'
++    'ExtrapolatedClock',
++    'TrackStatus'
+ ];
+ 
+ class F1LiveClient {
+@@ -62,6 +63,7 @@ class F1LiveClient {
+         this.raceControl = [];
+         this.teamRadio = [];
+         this.extrapolatedClock = {};
++        this.trackStatus = {};
+     }
+ 
+     /**
+@@ -282,6 +284,7 @@ class F1LiveClient {
+         if (result.LapCount) this.routeData('LapCount', result.LapCount);
+         if (result.TeamRadio) this.routeData('TeamRadio', result.TeamRadio);
+         if (result.ExtrapolatedClock) this.routeData('ExtrapolatedClock', result.ExtrapolatedClock);
++        if (result.TrackStatus) this.routeData('TrackStatus', result.TrackStatus);
+     }
+ 
+     /**
+@@ -354,6 +357,12 @@ class F1LiveClient {
+                 deepMerge(this.extrapolatedClock, data);
+                 this.broadcast({ type: 'ExtrapolatedClock', data: this.extrapolatedClock });
+                 break;
++            case 'TrackStatus':
++                // { Status: "1".."7", Message: "AllClear" | "Yellow" | "SCDeployed" | "Red" | "VSCDeployed" |
++                // "VSCEnding" } — the official track-wide condition, sent whenever it changes.
++                deepMerge(this.trackStatus, data);
++                this.broadcast({ type: 'TrackStatus', data: this.trackStatus });
++                break;
+         }
+     }
+ 
+@@ -394,6 +403,10 @@ class F1LiveClient {
+         return this.extrapolatedClock;
+     }
+ 
++    getTrackStatus() {
++        return this.trackStatus;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index 41aa379..f82a47a 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -17,14 +17,15 @@ function createSessionRouter(f1Client) {
+ 
+     /**
+      * GET /api/session
+-     * Retrieves current meeting and session metadata (SessionInfo channel) and the session clock
+-     * (ExtrapolatedClock channel).
++     * Retrieves current meeting and session metadata (SessionInfo channel), the session clock
++     * (ExtrapolatedClock channel) and the track-wide flag state (TrackStatus channel).
+      */
+     router.get('/session', (req, res) => {
+         try {
+             const sessionInfo = f1Client.getSessionInfo() || {};
+             const extrapolatedClock = f1Client.getExtrapolatedClock() || {};
+-            res.status(200).json({ Session: sessionInfo, ExtrapolatedClock: extrapolatedClock });
++            const trackStatus = f1Client.getTrackStatus() || {};
++            res.status(200).json({ Session: sessionInfo, ExtrapolatedClock: extrapolatedClock, TrackStatus: trackStatus });
+         } catch (error) {
+             console.error('[API Error] Failed to retrieve session info:', error);
+             res.status(500).json({ error: 'Internal server error while querying SessionInfo.' });

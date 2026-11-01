@@ -40,8 +40,7 @@ class FiaDocumentsRepository(private val cacheDir: File) {
             val tmp = File(dir, "${target.name}.part")
             NetworkClient.okHttpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-                val body = response.body ?: throw IOException("Empty response")
-                tmp.outputStream().use { out -> body.byteStream().copyTo(out) }
+                tmp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
             }
             // A captcha or error page served with status 200 would otherwise reach the PDF renderer.
             if (!tmp.hasPdfHeader()) {

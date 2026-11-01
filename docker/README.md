@@ -88,7 +88,7 @@ Replay feeds the stored messages through the same handlers as the live connectio
    REPLAY_TOKEN=some-long-random-string
    ```
    Without a token the replay API answers `503` and nothing can be started.
-2. Open `http://<host>:3000/replay`, enter the token, and press **Play** on a recording. Each recording has a speed multiplier (0.1-100, or 0 to pause) and, for races and sprints, a starting lap. While playing you can change the speed, jump to any lap, or return to live data. Speed 0 freezes the position, so every `/api/*` endpoint keeps returning the same data, which is handy for debugging; set a speed again to resume. The session clock keeps counting down in the app while paused, because the app extrapolates it in real time.
+2. Open `http://<host>:3000/replay`, enter the token, and press **Play** on a recording. Each recording has a speed multiplier (0.1-100, or 0 to pause) and, for races and sprints, a starting lap. While playing you can change the speed, jump to any lap, or return to live data. Speed 0 freezes the position, so every `/api/*` endpoint keeps returning the same data, which is handy for debugging; set a speed again to resume. The session clock freezes while paused.
 
 The same actions are available over HTTP with the header `x-replay-token: <token>` (or `Authorization: Bearer <token>`):
 
@@ -97,7 +97,13 @@ The same actions are available over HTTP with the header `x-replay-token: <token
 *   `POST /replay/api/keep` with `{"id":"race","keep":true}`
 *   `POST /replay/api/speed` with `{"speed":5}`, `POST /replay/api/jump` with `{"lap":30}`, `POST /replay/api/live`
 
-Notes: the session clock is only correct at 1x, because the app counts it down in real time. Jumping rebuilds the state from the start of the recording, so it can take a second on a long race. A recording that begins after the session started (for example the container was restarted mid-race) is marked **PARTIAL**.
+Notes: `/api/session` reports the session clock for the current replay position, but the app counts it down in real time between refreshes, so above 1x the clock falls behind and jumps forward at each refresh (about every 5 s; roughly 20 s at 5x). Jumping rebuilds the state from the start of the recording, so it can take a second on a long race. A recording that begins after the session started (for example the container was restarted mid-race) is marked **PARTIAL**.
+
+The replay code has unit tests; run them with Node 20 or newer from `docker/replay`:
+
+```bash
+node --test
+```
 
 ---
 

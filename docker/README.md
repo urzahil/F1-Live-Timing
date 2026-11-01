@@ -48,7 +48,6 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - `PitTimes` is what the feed currently shows. An entry appears as a car enters the pit lane, gets its `Duration` (seconds, `""` until then) when it leaves, and is removed about 30 s later, so it is usually empty. A new connection always starts from that short-lived view.
    - `PitStops` is every completed stop of the session per driver, with the lap and the pit lane time in seconds. It survives the feed removing entries and a reconnect, and starts again when the session changes. Stops made while the backend was not connected are not in it.
 7. **`07-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 06.
-8. **`08-session-data.patch`** subscribes to `SessionData` and returns it from `GET /api/session-data` as `{"SessionData": {"Series": [{"Utc", "Lap"}], ...}}`: the start time of each lap, plus the status history if the feed sends it. Applies on top of 07.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -145,5 +144,4 @@ A round with no documents returns an empty list. A missing or non-numeric `year`
 *   `GET /api/radio`: Team radio telemetry broadcasts.
 *   `GET /api/pitstops`: Pit lane times: the entries the feed shows now (`PitTimes`) and every completed stop of the session per driver (`PitStops`).
 *   `GET /api/timing-stats`: Personal bests, best sectors and best speeds per driver, with rank.
-*   `GET /api/session-data`: Lap start timestamps and status history.
 *   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).

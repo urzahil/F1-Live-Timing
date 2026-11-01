@@ -24,7 +24,12 @@ data class ParsedSession(
     val totalLaps: Int = 0,
     val status: String = "NO ACTIVE SESSION",
     val isLive: Boolean = false,
-    val clock: ParsedSessionClock? = null
+    val clock: ParsedSessionClock? = null,
+    /**
+     * Official track condition from the feed's TrackStatus channel (or a red-flagged "Aborted" session).
+     * Null when the backend does not report it; the app then falls back to reading race control messages.
+     */
+    val trackStatus: TrackStatus? = null
 )
 
 /**
@@ -210,7 +215,7 @@ class F1LiveRepository {
                     "ENDING" in text -> TrackStatus.CLEAR
                     else -> status
                 }
-                m.flag == "RED" && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
+                (m.flag == "RED" || text.trim() == "RED FLAG") && (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
                 trackWide && (m.flag == "CLEAR" || m.flag == "GREEN") -> TrackStatus.CLEAR
                 else -> status
             }
@@ -267,6 +272,29 @@ class F1LiveRepository {
             seconds + (fraction?.padEnd(3, '0')?.toLong() ?: 0L)
         } catch (error: Exception) {
             null
+        }
+    }
+
+    /**
+     * Parses the feed's TrackStatus ({Status: "1".."7", Message}); null when absent or unknown. Yellow
+     * (status 2) is a local condition with no pill of its own, so it reads as clear, as does a VSC that is
+     * already ending (status 7), matching how the race control messages are read.
+     */
+    fun parseTrackStatus(trackStatus: JSONObject?): TrackStatus? {
+        if (trackStatus == null) return null
+        val byCode = when (trackStatus.optString("Status", "").trim()) {
+            "1", "2", "7" -> TrackStatus.CLEAR
+            "4" -> TrackStatus.SAFETY_CAR
+            "5" -> TrackStatus.RED_FLAG
+            "6" -> TrackStatus.VIRTUAL_SAFETY_CAR
+            else -> null
+        }
+        return byCode ?: when (trackStatus.optString("Message", "").trim().uppercase()) {
+            "ALLCLEAR", "YELLOW", "VSCENDING" -> TrackStatus.CLEAR
+            "SCDEPLOYED" -> TrackStatus.SAFETY_CAR
+            "RED" -> TrackStatus.RED_FLAG
+            "VSCDEPLOYED" -> TrackStatus.VIRTUAL_SAFETY_CAR
+            else -> null
         }
     }
 
@@ -392,7 +420,9 @@ class F1LiveRepository {
                 sessionRoot.optString("Status", json.optString("Status", ""))
             }
 
-            val isStarted = rawStatus.equals("Started", ignoreCase = true) ||
+            // The feed reports a red-flagged session as "Aborted"; it is still running and resumes later.
+            val isAborted = rawStatus.equals("Aborted", ignoreCase = true)
+            val isStarted = isAborted || rawStatus.equals("Started", ignoreCase = true) ||
                     rawStatus.equals("Active", ignoreCase = true) ||
                     rawStatus.equals("Live", ignoreCase = true)
 
@@ -419,7 +449,9 @@ class F1LiveRepository {
                 totalLaps = totalLaps,
                 status = displayStatus,
                 isLive = isLive,
-                clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock"))
+                clock = parseSessionClock(json.optJSONObject("ExtrapolatedClock")),
+                trackStatus = parseTrackStatus(json.optJSONObject("TrackStatus"))
+                    ?: if (isAborted) TrackStatus.RED_FLAG else null
             )
         } catch (error: Exception) {
             Log.w(TAG, "Unable to parse session data (${error.javaClass.simpleName})")

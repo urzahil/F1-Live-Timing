@@ -328,8 +328,32 @@ class ExampleRobolectricTest {
     assertEquals(TrackStatus.VIRTUAL_SAFETY_CAR, status("||VIRTUAL SAFETY CAR DEPLOYED"))
     assertEquals(TrackStatus.CLEAR, status("||VIRTUAL SAFETY CAR DEPLOYED", "||VIRTUAL SAFETY CAR ENDING"))
     assertEquals(TrackStatus.RED_FLAG, status("RED|Track|RED FLAG"))
+    assertEquals(TrackStatus.RED_FLAG, status("|Track|RED FLAG"))
     // A sector-only clear must not end a track-wide condition.
     assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "CLEAR|Sector|CLEAR IN TRACK SECTOR 4"))
+  }
+
+  @Test
+  fun `feed track status drives the header pill and an aborted session is a live red flag`() {
+    val repo = F1LiveRepository()
+    fun session(extra: String, status: String = "Started") = repo.parseSessionJson(
+      """{"Session":{"Meeting":{"Name":"Mexico City Grand Prix"},"Type":"Qualifying","Name":"Qualifying",
+        "SessionStatus":"$status"}$extra}"""
+    )
+
+    val red = session(""","TrackStatus":{"Status":"5","Message":"Red"}""")
+    assertEquals(true, red.isLive)
+    assertEquals(TrackStatus.RED_FLAG, red.trackStatus)
+    assertEquals(TrackStatus.CLEAR, session(""","TrackStatus":{"Status":"1","Message":"AllClear"}""").trackStatus)
+    assertEquals(TrackStatus.CLEAR, session(""","TrackStatus":{"Status":"2","Message":"Yellow"}""").trackStatus)
+    assertEquals(TrackStatus.SAFETY_CAR, session(""","TrackStatus":{"Status":"4","Message":"SCDeployed"}""").trackStatus)
+    assertEquals(TrackStatus.VIRTUAL_SAFETY_CAR, session(""","TrackStatus":{"Message":"VSCDeployed"}""").trackStatus)
+    // Older backends without TrackStatus leave it to the race control messages.
+    assertEquals(null, session("").trackStatus)
+
+    val aborted = session("", status = "Aborted")
+    assertEquals(true, aborted.isLive)
+    assertEquals(TrackStatus.RED_FLAG, aborted.trackStatus)
   }
 
   @Test

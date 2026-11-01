@@ -1,0 +1,2 @@
+# Unit tests for the replay code are run locally with `node --test`; keep them out of the image.
+replay/*.test.js

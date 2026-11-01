@@ -29,6 +29,27 @@ function rebaseClock(clock, shiftMs) {
     if (Number.isFinite(ms)) clock.Utc = new Date(ms + shiftMs).toISOString();
 }
 
+/**
+ * @description Parses an ExtrapolatedClock Remaining value ("H:MM:SS").
+ * @returns {number|null} Milliseconds, or null when malformed.
+ */
+function parseRemaining(value) {
+    const parts = typeof value === 'string' ? value.trim().split(':') : [];
+    if (parts.length !== 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
+    const [h, m, s] = parts.map(Number);
+    return (h * 3600 + m * 60 + s) * 1000;
+}
+
+/**
+ * @description Formats milliseconds as an ExtrapolatedClock Remaining value ("H:MM:SS"), dropping any
+ * fraction of a second.
+ */
+function formatRemaining(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${Math.floor(total / 3600)}:${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
+}
+
 class Replayer {
     /**
      * @param {F1LiveClient} client - Client whose state the replay drives.
@@ -45,6 +66,19 @@ class Replayer {
         this.base = 0;
         this.wallStart = 0;
         this.finished = false;
+        // Session clock as recorded (Utc not rebased), merged from every ExtrapolatedClock seen so far, and
+        // the wall-minus-position offset of the record that last set its Utc (recordings can skip downtime).
+        this.clock = null;
+        this.clockOffset = 0;
+
+        // The app counts the clock down at 1x between polls, so during a replay /api/session must report the
+        // clock for the current replay position instead of the last recorded message, or it drifts above 1x.
+        if (typeof client.getExtrapolatedClock === 'function') {
+            const original = client.getExtrapolatedClock.bind(client);
+            client.getExtrapolatedClock = () => (client.replaying && this.currentClock()) || original();
+        } else {
+            console.warn('[Replayer] client.getExtrapolatedClock is missing; the replayed session clock is only correct at 1x.');
+        }
     }
 
     parseSpeed(value) {
@@ -139,6 +173,7 @@ class Replayer {
         this.halt();
         this.rec = null;
         this.slot = null;
+        this.clock = null;
         if (this.client.replaying) this.client.exitReplay();
     }
 
@@ -161,6 +196,7 @@ class Replayer {
     seek(target) {
         this.halt();
         this.client.resetState();
+        this.clock = null;
         const rec = this.rec;
         const pos = target > 0 ? rec.ts[target] : 0;
         this.idx = 0;
@@ -202,12 +238,16 @@ class Replayer {
             // While paused (speed 0) treat the rate as 1 so the shift stays finite.
             const shift = Date.now() - (pos - rec.ts[i]) / (this.speed || 1) - rec.ws[i];
             if (msg.k === 's') {
-                if (msg.d.ExtrapolatedClock) rebaseClock(msg.d.ExtrapolatedClock, shift);
+                if (msg.d.ExtrapolatedClock) {
+                    this.noteClock(msg.d.ExtrapolatedClock, i);
+                    rebaseClock(msg.d.ExtrapolatedClock, shift);
+                }
                 this.client.handleSnapshot(msg.d);
             } else {
                 let payload = msg.d;
                 if (msg.c === 'ExtrapolatedClock') {
                     payload = parsePayload(payload);
+                    this.noteClock(payload, i);
                     rebaseClock(payload, shift);
                 }
                 this.client.routeData(msg.c, payload);
@@ -216,6 +256,42 @@ class Replayer {
         } catch (err) {
             console.error('[Replayer] Skipped a record:', err.message);
         }
+    }
+
+    /**
+     * @description Merges a recorded ExtrapolatedClock payload (before its Utc is rebased) into this.clock.
+     * @param {Object} payload - Full clock or a partial delta.
+     * @param {number} i - Index of the record that carried it.
+     */
+    noteClock(payload, i) {
+        if (!payload || typeof payload !== 'object') return;
+        this.clock = Object.assign(this.clock || {}, payload);
+        if (payload.Utc !== undefined) this.clockOffset = this.rec.ws[i] - this.rec.ts[i];
+    }
+
+    /**
+     * @description Session clock for the current replay position, as {Utc, Remaining, Extrapolating} with
+     * Utc set so that Remaining - (now - Utc) is exact. Paused or finished replays report a stopped clock.
+     * @returns {Object|null} The clock, or null when none has been replayed yet or it is malformed.
+     */
+    currentClock() {
+        const rec = this.rec;
+        const clock = this.clock;
+        if (!rec || !clock) return null;
+        const remaining = parseRemaining(clock.Remaining);
+        const utcMs = Date.parse(clock.Utc);
+        if (remaining === null || !Number.isFinite(utcMs)) return null;
+
+        const pos = Math.min(this.position(), rec.ts[rec.n - 1]);
+        const extrapolating = clock.Extrapolating === true;
+        const remainingMs = extrapolating ? Math.max(0, remaining - (pos - (utcMs - this.clockOffset))) : remaining;
+        const running = extrapolating && this.speed !== 0 && !this.finished && remainingMs > 0;
+        const roundedMs = Math.ceil(remainingMs / 1000) * 1000;
+        return {
+            Utc: new Date(Date.now() - (roundedMs - remainingMs)).toISOString(),
+            Remaining: formatRemaining(roundedMs),
+            Extrapolating: running
+        };
     }
 
     /**
@@ -242,4 +318,4 @@ class Replayer {
     }
 }
 
-module.exports = { Replayer };
+module.exports = { Replayer, formatRemaining };

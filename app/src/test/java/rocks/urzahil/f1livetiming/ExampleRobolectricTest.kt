@@ -331,6 +331,19 @@ class ExampleRobolectricTest {
     assertEquals(TrackStatus.RED_FLAG, status("|Track|RED FLAG"))
     // A sector-only clear must not end a track-wide condition.
     assertEquals(TrackStatus.SAFETY_CAR, status("||SAFETY CAR DEPLOYED", "CLEAR|Sector|CLEAR IN TRACK SECTOR 4"))
+
+    // Mexico City 2026: safety car, then a red flag with no Flag/Scope, then TRACK CLEAR during the suspension.
+    val suspension = arrayOf(
+      "||SAFETY CAR DEPLOYED",
+      "||RED FLAG - RACE SUSPENDED",
+      "CLEAR|Sector|CLEAR IN TRACK SECTOR 2",
+      "CLEAR|Track|TRACK CLEAR",
+      "DOUBLE YELLOW|Sector|DOUBLE YELLOW IN TRACK SECTOR 3"
+    )
+    assertEquals(TrackStatus.RED_FLAG, status(*suspension))
+    // The red flag ends when the pit exit opens again, or with a safety car restart.
+    assertEquals(TrackStatus.CLEAR, status(*suspension, "GREEN|Track|GREEN LIGHT - PIT EXIT OPEN"))
+    assertEquals(TrackStatus.SAFETY_CAR, status(*suspension, "||SAFETY CAR DEPLOYED"))
   }
 
   @Test

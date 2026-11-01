@@ -341,7 +341,13 @@ class ExampleRobolectricTest {
       "DOUBLE YELLOW|Sector|DOUBLE YELLOW IN TRACK SECTOR 3"
     )
     assertEquals(TrackStatus.RED_FLAG, status(*suspension))
-    // The red flag ends when the pit exit opens again, or with a safety car restart.
+    // Still suspended while the resumption is announced and the safety car lights come on.
+    val resuming = arrayOf(*suspension, "||RACE WILL RESUME AT 15:45", "||SAFETY CAR LIGHTS ON")
+    assertEquals(TrackStatus.RED_FLAG, status(*resuming))
+    // The race resumed with a standing start (or, failing that, overtaking is re-enabled after it).
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||STANDING START"))
+    assertEquals(TrackStatus.CLEAR, status(*resuming, "||OVERTAKE ENABLED"))
+    // The red flag also ends when the pit exit opens again, or with a safety car restart.
     assertEquals(TrackStatus.CLEAR, status(*suspension, "GREEN|Track|GREEN LIGHT - PIT EXIT OPEN"))
     assertEquals(TrackStatus.SAFETY_CAR, status(*suspension, "||SAFETY CAR DEPLOYED"))
   }

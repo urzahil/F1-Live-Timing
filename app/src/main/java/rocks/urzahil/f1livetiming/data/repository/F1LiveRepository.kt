@@ -198,7 +198,8 @@ class F1LiveRepository {
      * Track condition after replaying [messagesOldestFirst]. The feed has no live track status
      * here, so it is read from the messages: a safety car, VSC or red flag stays in force until
      * a track-wide clear/green (or the VSC announces its end); a red flag only ends on a green track flag,
-     * a safety car or VSC restart, or the chequered flag. Sector-scoped flags are ignored.
+     * a standing/rolling start announcement, a safety car or VSC restart, or the chequered flag. Sector-scoped
+     * flags are ignored.
      */
     fun deriveTrackStatus(messagesOldestFirst: List<ParsedRaceControlMessage>): TrackStatus {
         var status = TrackStatus.CLEAR
@@ -220,6 +221,10 @@ class F1LiveRepository {
                 (m.flag == "RED" || text.trim().startsWith("RED FLAG") || "SUSPENDED" in text) &&
                     (trackWide || m.scope.isBlank()) -> TrackStatus.RED_FLAG
                 m.flag == "CHEQUERED" -> TrackStatus.CLEAR
+                // A race resumes with "STANDING START" (or "ROLLING START") at the announced time, then
+                // "OVERTAKE ENABLED" once racing; neither posts a green flag. "RACE WILL RESUME AT" does not end it.
+                status == TrackStatus.RED_FLAG && ("STANDING START" in text || "ROLLING START" in text ||
+                    text.trim() == "RACE START" || text.trim() == "OVERTAKE ENABLED") -> TrackStatus.CLEAR
                 // Marshals clearing the track during a suspension post "TRACK CLEAR" while the session is still
                 // stopped, so a red flag only ends when the pit exit opens again (a green track flag).
                 trackWide && m.flag == "GREEN" -> TrackStatus.CLEAR

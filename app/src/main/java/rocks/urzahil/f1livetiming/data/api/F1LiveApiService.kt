@@ -1,39 +1,22 @@
 package rocks.urzahil.f1livetiming.data.api
 
 import rocks.urzahil.f1livetiming.data.model.FiaDocumentsResponse
+import rocks.urzahil.f1livetiming.data.model.LiveSnapshotResponse
 import rocks.urzahil.f1livetiming.data.model.LiveStatusResponse
-import okhttp3.ResponseBody
 import retrofit2.http.GET
 import retrofit2.http.Query
 
 /**
- * Retrofit interface for self-hosted julesr0y/f1-livetiming-api backend
+ * Retrofit interface for the self-hosted f1-livetiming-api backend (docker/)
  */
 interface F1LiveApiService {
 
     @GET("api/status")
     suspend fun getStatus(): LiveStatusResponse
 
-    @GET("api/session")
-    suspend fun getSessionRaw(): ResponseBody
-
-    @GET("api/leaderboard")
-    suspend fun getLeaderboardRaw(): ResponseBody
-
-    @GET("api/standings")
-    suspend fun getStandingsRaw(): ResponseBody
-
-    @GET("api/tyres")
-    suspend fun getTyresRaw(): ResponseBody
-
-    @GET("api/weather")
-    suspend fun getWeatherRaw(): ResponseBody
-
-    @GET("api/race-control")
-    suspend fun getRaceControlRaw(): ResponseBody
-
-    @GET("api/lap-count")
-    suspend fun getLapCountRaw(): ResponseBody
+    /** The whole live timing screen in one display-ready reply; 404 on backends older than patch 09. */
+    @GET("api/live")
+    suspend fun getLive(): LiveSnapshotResponse
 
     @GET("api/documents")
     suspend fun getFiaDocuments(@Query("year") year: Int, @Query("round") round: Int): FiaDocumentsResponse

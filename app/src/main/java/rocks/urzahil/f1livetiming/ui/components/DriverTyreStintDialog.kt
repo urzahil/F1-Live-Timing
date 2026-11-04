@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
+import rocks.urzahil.f1livetiming.data.model.ParsedDriverTiming
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1PitWallSurface

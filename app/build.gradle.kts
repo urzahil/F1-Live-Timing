@@ -12,8 +12,8 @@ android {
     applicationId = "rocks.urzahil.f1livetiming"
     minSdk = 24
     targetSdk = 36
-    versionCode = 27
-    versionName = "1.10.3"
+    versionCode = 28
+    versionName = "1.11.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

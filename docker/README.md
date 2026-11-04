@@ -49,6 +49,7 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - `PitStops` is every completed stop of the session per driver, with the lap and the pit lane time in seconds. It survives the feed removing entries and a reconnect, and starts again when the session changes. Stops made while the backend was not connected are not in it.
 7. **`07-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 06.
 8. **`08-session-status.patch`** subscribes to F1's `SessionStatus` channel and returns it from `/api/session` as `"SessionStatus": {"Status": "Started"}`. It reads `"Aborted"` while the session is suspended under a red flag, which the app shows as a red flag even when `TrackStatus` still reads safety car or all clear. Applies on top of 07.
+9. **`09-live-snapshot.patch`** mounts `GET /api/live`, the whole live timing screen in one display-ready response (the code is in [`docker/live/`](live/)). The app reads only this endpoint for live timing, so **an app from this version on needs a backend with this patch**; an older one makes it ask you to rebuild. See [Live Snapshot](#live-snapshot) below.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -137,6 +138,50 @@ The container keeps a local copy of the FIA decision documents listed by `https:
 A round with no documents returns an empty list. A missing or non-numeric `year` or `round` answers `400`, and `503` means the first load has not finished yet.
 
 ---
+
+## Live Snapshot
+
+`GET /api/live` is what the app polls (every 5 s while a session is live, every 60 s otherwise). The backend reads its live channel state and works out everything the live timing screen shows, so the app only displays the reply:
+
+- **Session:** names, laps, display status (`STARTED`, `SESSION FINISHED`, `NO ACTIVE SESSION` or the feed's own), whether it is live, whether it runs on time (practice, qualifying), the qualifying part (`Q1`-`Q3`, `SQ1`-`SQ3`, worked out from the eliminations) and the session clock.
+- **Track status** for the header pill: `CLEAR`, `SAFETY_CAR`, `VIRTUAL_SAFETY_CAR` or `RED_FLAG`. A suspended (`Aborted`) session is a red flag. Otherwise it follows the feed's `TrackStatus`, or the race control messages when that is missing.
+- **Weather**, already formatted with units (`--` when missing).
+- **Race control:** the latest 5 messages, newest first, with their time in epoch millis (the app shows it in the device's time zone).
+- **Drivers** in display order: the right gap fields for each session type (race gaps, practice and qualifying time differences per part), sectors, tyres and stints, pit stops, retired/stopped/knocked out, "catching" and the session's fastest lap.
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": 1793785579306,
+  "session": {
+    "meetingName": "São Paulo Grand Prix", "sessionName": "Race", "sessionType": "Race",
+    "currentLap": 20, "totalLaps": 71, "status": "STARTED", "isLive": true,
+    "isTimed": false, "qualifyingPart": null,
+    "clock": { "remainingMillis": 5400000, "utcMillis": 1794158400123, "extrapolating": true }
+  },
+  "trackStatus": "SAFETY_CAR",
+  "weather": { "airTemp": "24.1 °C", "trackTemp": "44.0 °C", "humidity": "60.0 %", "pressure": "925.1 hPa", "windSpeed": "1.4 m/s", "windDirection": "120°", "isRaining": false },
+  "raceControl": [ { "utcMillis": 1794158280000, "category": "SafetyCar", "flag": "", "message": "SAFETY CAR DEPLOYED", "scope": "" } ],
+  "drivers": [
+    {
+      "position": "1", "racingNumber": "4", "driverCode": "NOR", "fullName": "Lando NORRIS",
+      "teamName": "McLaren", "teamColorHex": "F47600",
+      "gapToLeader": "LAP 20", "intervalToAhead": "LAP 20", "bestLapTime": "1:12.300", "lastLapTime": "--",
+      "sector1": "--", "sector2": "--", "sector3": "--",
+      "inPit": false, "pitStops": 1, "totalLaps": 0, "isRetired": false, "isStopped": false,
+      "currentCompound": "HARD", "currentCompoundAge": 3, "isCurrentCompoundNew": false,
+      "stintsHistory": [ { "stintNumber": 1, "compound": "SOFT", "totalLaps": 10, "isNew": true }, { "stintNumber": 2, "compound": "HARD", "totalLaps": 3, "isNew": false } ],
+      "isOverallBestLap": false, "isCatchingAhead": null, "isKnockedOut": false
+    }
+  ]
+}
+```
+
+`schemaVersion` only goes up when a field changes meaning or is removed. Adding fields does not change it, and the app ignores fields it does not know. An app that receives a higher version than it supports asks to be updated.
+
+The rules are tested in [`live/live-snapshot.test.js`](live/live-snapshot.test.js); run `node --test` in `docker/live/`.
+
+---
 ## Available Endpoints
 
 *   `GET /api/status`: Health check, connection state (`CONNECTED` or `DISCONNECTED`), uptime, and timestamp.
@@ -152,3 +197,4 @@ A round with no documents returns an empty list. A missing or non-numeric `year`
 *   `GET /api/pitstops`: Pit lane times: the entries the feed shows now (`PitTimes`) and every completed stop of the session per driver (`PitStops`).
 *   `GET /api/timing-stats`: Personal bests, best sectors and best speeds per driver, with rank.
 *   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).
+*   `GET /api/live`: Everything the app's live timing screen shows, in one display-ready response. See [Live Snapshot](#live-snapshot).

@@ -49,12 +49,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
-import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
-import rocks.urzahil.f1livetiming.data.repository.TrackStatus
-import rocks.urzahil.f1livetiming.data.repository.ParsedSession
-import rocks.urzahil.f1livetiming.data.repository.ParsedSessionClock
-import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
+import rocks.urzahil.f1livetiming.data.model.ParsedDriverTiming
+import rocks.urzahil.f1livetiming.data.model.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.model.TrackStatus
+import rocks.urzahil.f1livetiming.data.model.ParsedSession
+import rocks.urzahil.f1livetiming.data.model.ParsedSessionClock
+import rocks.urzahil.f1livetiming.data.model.ParsedWeather
 import rocks.urzahil.f1livetiming.ui.components.FlagIndicator
 import rocks.urzahil.f1livetiming.ui.components.RaceControlCard
 import rocks.urzahil.f1livetiming.ui.components.TyreBadge
@@ -89,10 +89,10 @@ fun LiveTimingScreen(
     onNavigateToCalendar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Eliminated qualifying drivers are hidden; how many there are tells which part is running.
+    // Eliminated qualifying drivers are hidden.
     val visibleTimings = remember(liveTimings) { liveTimings.filterNot { it.isKnockedOut } }
-    val isTimed = isTimedSession(session)
-    val qualifyingPart = qualifyingPartLabel(session, liveTimings.count { it.isKnockedOut })
+    val isTimed = session.isTimed
+    val qualifyingPart = session.qualifyingPart
     val hasSessionData = liveTimings.isNotEmpty() || session.sessionName.isNotBlank() || session.meetingName.isNotBlank()
     val isLiveSessionActive = (session.isLive || (showLatestSession && hasSessionData)) && liveTimings.isNotEmpty()
 
@@ -268,35 +268,6 @@ private fun formatSessionClock(remainingMillis: Long): String {
     } else {
         String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
-}
-
-/** Practice, Qualifying and Sprint Qualifying/Shootout run on time rather than a lap count. */
-private fun isTimedSession(session: ParsedSession): Boolean {
-    val type = session.sessionType.trim()
-    if (type.equals("Practice", ignoreCase = true) || type.equals("Qualifying", ignoreCase = true)) return true
-    if (type.isNotEmpty()) return false
-    val name = session.sessionName.lowercase()
-    return "practice" in name || "qualifying" in name || "shootout" in name
-}
-
-/**
- * "Q1"/"Q2"/"Q3" (or "SQ1"… for sprint qualifying), or null outside qualifying. The feed does not name the
- * part, so it is inferred from the eliminations: 6 drivers are out after Q1 and 12 after Q2.
- */
-private fun qualifyingPartLabel(session: ParsedSession, knockedOut: Int): String? {
-    val type = session.sessionType.trim()
-    val name = session.sessionName.lowercase()
-    val isQualifying = type.equals("Qualifying", ignoreCase = true) ||
-        (type.isEmpty() && ("qualifying" in name || "shootout" in name))
-    if (!isQualifying) return null
-    val prefix = if ("sprint" in name || "shootout" in name) "SQ" else "Q"
-    val part = when {
-        // This consider 6 drivers knocked out per session, change accordingly if rules change CM
-        knockedOut >= 12 -> 3
-        knockedOut >= 6 -> 2
-        else -> 1
-    }
-    return "$prefix$part"
 }
 
 @Composable

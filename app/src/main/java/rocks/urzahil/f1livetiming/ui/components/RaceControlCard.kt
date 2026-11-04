@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.model.ParsedRaceControlMessage
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
 import rocks.urzahil.f1livetiming.ui.theme.F1CardSurface
 import rocks.urzahil.f1livetiming.ui.theme.F1TextMuted
@@ -36,6 +36,9 @@ import rocks.urzahil.f1livetiming.ui.theme.FlagGreen
 import rocks.urzahil.f1livetiming.ui.theme.FlagRed
 import rocks.urzahil.f1livetiming.ui.theme.FlagSafetyCar
 import rocks.urzahil.f1livetiming.ui.theme.FlagYellow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** Latest race control messages (newest first), shown below the classification. */
 @Composable
@@ -83,11 +86,15 @@ fun RaceControlCard(
     }
 }
 
+/** The message's publication time in the device's zone as "HH:mm:ss", or "--:--:--" without one. */
+private fun localTime(utcMillis: Long?): String =
+    utcMillis?.let { SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(it)) } ?: "--:--:--"
+
 @Composable
 private fun RaceControlMessageRow(message: ParsedRaceControlMessage) {
     Row(verticalAlignment = Alignment.Top) {
         Text(
-            text = message.time.ifBlank { "--:--:--" },
+            text = localTime(message.utcMillis),
             color = F1TextMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,

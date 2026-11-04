@@ -2,6 +2,7 @@ package rocks.urzahil.f1livetiming.data.api
 
 import android.util.Log
 import com.squareup.moshi.Moshi
+import rocks.urzahil.f1livetiming.data.model.TrackStatusAdapter
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -10,11 +11,12 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import retrofit2.HttpException
 
 object NetworkClient {
 
     // All API models use @JsonClass(generateAdapter = true), so no reflection adapter is needed.
-    private val moshi: Moshi = Moshi.Builder().build()
+    private val moshi: Moshi = Moshi.Builder().add(TrackStatusAdapter).build()
 
     private const val TAG = "F1Network"
 
@@ -81,6 +83,13 @@ object NetworkClient {
             val service = createLiveService(baseUrl)
             val status = service.getStatus()
             val latency = System.currentTimeMillis() - startTime
+            if (!servesLiveSnapshot(service)) {
+                return PingResult(
+                    isSuccess = false,
+                    latencyMs = latency,
+                    message = "Connected, but the backend is out of date. Rebuild it to show live timing."
+                )
+            }
             PingResult(
                 isSuccess = true,
                 latencyMs = latency,
@@ -98,6 +107,18 @@ object NetworkClient {
             )
         }
     }
+}
+
+/** False only when the backend answers that it has no GET /api/live; other failures are not held against it. */
+private suspend fun servesLiveSnapshot(service: F1LiveApiService): Boolean = try {
+    service.getLive()
+    true
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: HttpException) {
+    error.code() != 404
+} catch (error: Exception) {
+    true
 }
 
 data class PingResult(

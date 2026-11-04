@@ -1,13 +1,15 @@
 package rocks.urzahil.f1livetiming.ui.viewmodel
 
+import rocks.urzahil.f1livetiming.data.model.LiveSnapshotResponse
+import rocks.urzahil.f1livetiming.data.model.ParsedDriverTiming
+import rocks.urzahil.f1livetiming.data.model.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.model.ParsedSession
+import rocks.urzahil.f1livetiming.data.model.ParsedWeather
+import rocks.urzahil.f1livetiming.data.model.TrackStatus
+import rocks.urzahil.f1livetiming.data.model.hasIdentity
+import rocks.urzahil.f1livetiming.data.repository.BackendOutdatedException
+import rocks.urzahil.f1livetiming.data.repository.BackendTooNewException
 import rocks.urzahil.f1livetiming.data.repository.F1LiveRepository
-import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
-import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
-import rocks.urzahil.f1livetiming.data.repository.ParsedSession
-import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
-import rocks.urzahil.f1livetiming.data.repository.TrackStatus
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 
 internal data class LiveTimingSnapshot(
     val session: ParsedSession = ParsedSession(),
@@ -19,135 +21,68 @@ internal data class LiveTimingSnapshot(
 )
 
 /**
- * Coordinates live session, weather, and timing refreshes independently of UI state. It retains
- * the last good response on failures, avoids caching empty timing replies, and applies expiry and
- * session-transition rules through LiveTimingRefreshPolicy.
+ * Fetches the backend's live snapshot, which already holds everything the screen shows. On failures it
+ * keeps the last good snapshot and reports why, so the screen never blanks on a single missed refresh.
  */
 internal class LiveTimingCoordinator(
-    private val repository: F1LiveRepository = F1LiveRepository(),
+    private val fetchSnapshot: suspend (String) -> Result<LiveSnapshotResponse> = F1LiveRepository()::fetchLiveSnapshot,
     private val policy: LiveTimingRefreshPolicy = LiveTimingRefreshPolicy(),
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     private var snapshot = LiveTimingSnapshot()
-    private var lastWeatherFetchAt = 0L
-    private var lastTimingsFetchAt = 0L
-    private var lastSessionSuccessAt = 0L
-    private var finalTimingFetchSessionKey: String? = null
-    private var raceControlTrackStatus = TrackStatus.CLEAR
+    private var lastSuccessAt = 0L
 
     fun resetForBackendChange() {
-        lastWeatherFetchAt = 0L
-        lastTimingsFetchAt = 0L
-        lastSessionSuccessAt = 0L
-        finalTimingFetchSessionKey = null
+        lastSuccessAt = 0L
         snapshot = snapshot.copy(error = null)
     }
 
-    suspend fun refresh(baseUrl: String, force: Boolean, showLatestSession: Boolean): LiveTimingSnapshot {
+    suspend fun refresh(baseUrl: String): LiveTimingSnapshot {
         val currentUrl = baseUrl.trim()
         if (currentUrl.isBlank()) return snapshot
 
         val now = clock()
-        var stale = false
-        val previousSession = snapshot.session
-        val sessionResult = repository.fetchSession(currentUrl)
-        sessionResult.onSuccess { parsed ->
-            val hasIdentity = parsed.meetingName.isNotBlank() || parsed.sessionName.isNotBlank()
-            val hadIdentity = previousSession.meetingName.isNotBlank() || previousSession.sessionName.isNotBlank()
-            val incompleteEmptyReply = !hasIdentity && hadIdentity &&
-                now - lastSessionSuccessAt < policy.dataTtlMillis &&
-                !previousSession.status.contains("FINISHED", ignoreCase = true)
-            if (incompleteEmptyReply) {
-                stale = true
-            } else {
-                val sessionChanged = sessionKey(parsed) != sessionKey(previousSession)
-                if (sessionChanged && snapshot.timings.isNotEmpty()) {
-                    // A session disappearing or changing must not leave the prior leaderboard
-                    // attached to the next session, even when an empty session response arrives.
-                    snapshot = snapshot.copy(timings = emptyList())
-                    lastTimingsFetchAt = 0L
-                    finalTimingFetchSessionKey = null
-                }
-                if (sessionChanged) {
-                    snapshot = snapshot.copy(raceControl = emptyList())
-                    raceControlTrackStatus = TrackStatus.CLEAR
-                }
-                snapshot = snapshot.copy(session = parsed)
-                lastSessionSuccessAt = now
-            }
-        }.onFailure { stale = true }
-
-        val session = snapshot.session
-        val hasIdentity = session.meetingName.isNotBlank() ||
-            session.sessionName.isNotBlank() || session.sessionType.isNotBlank()
-        val key = sessionKey(session)
-        val justCompleted = previousSession.isLive && !session.isLive
-        val finished = session.status.contains("FINISHED", ignoreCase = true)
-        val fetchWeather = policy.shouldFetchWeather(now, lastWeatherFetchAt, force)
-        val fetchTimings = policy.shouldFetchTimings(
-            now = now,
-            lastFetch = lastTimingsFetchAt,
-            force = force,
-            sessionIsLive = session.isLive,
-            showLatestSession = showLatestSession,
-            hasSessionIdentity = hasIdentity,
-            justCompleted = justCompleted,
-            sessionFinished = finished,
-            sessionKey = key,
-            finalFetchedSessionKey = finalTimingFetchSessionKey
-        )
-
-        // Weather, timings and race control do not depend on each other, so they are requested together;
-        // the results are then applied one after another below.
-        val (weatherResult, timingsResult, raceControlResult) = coroutineScope {
-            val weather = if (fetchWeather) async { repository.fetchWeather(currentUrl) } else null
-            val timings = if (fetchTimings) async { repository.fetchLiveTimings(currentUrl) } else null
-            val raceControl = if (fetchTimings) async { repository.fetchRaceControl(currentUrl) } else null
-            Triple(weather?.await(), timings?.await(), raceControl?.await())
-        }
-
-        weatherResult?.onSuccess { weather ->
-            snapshot = snapshot.copy(weather = weather)
-            lastWeatherFetchAt = now
-        }?.onFailure { stale = true }
-
-        if (timingsResult != null) {
-            timingsResult.onSuccess { timings ->
-                if (timings.isNotEmpty()) {
-                    snapshot = snapshot.copy(timings = timings)
-                    lastTimingsFetchAt = now
-                    if (!session.isLive) finalTimingFetchSessionKey = key
-                } else if (snapshot.timings.isNotEmpty()) {
-                    stale = true
+        fetchSnapshot(currentUrl)
+            .onSuccess { live ->
+                // A backend that has just restarted answers with no session until the feed reconnects. A
+                // session that was running a moment ago stays on screen, marked stale, rather than blanking.
+                val previous = snapshot.session
+                val emptyAfterRestart = !live.session.hasIdentity && previous.hasIdentity &&
+                    now - lastSuccessAt < policy.dataTtlMillis &&
+                    !previous.status.contains("FINISHED", ignoreCase = true)
+                snapshot = if (emptyAfterRestart) {
+                    snapshot.copy(error = STALE_MESSAGE)
                 } else {
-                    lastTimingsFetchAt = 0L
+                    lastSuccessAt = now
+                    LiveTimingSnapshot(
+                        session = live.session,
+                        weather = live.weather,
+                        timings = live.drivers,
+                        raceControl = live.raceControl,
+                        trackStatus = live.trackStatus
+                    )
                 }
-            }.onFailure { stale = true }
-
-            // Supplementary to the leaderboard: a failed fetch keeps the last list without marking
-            // the whole snapshot stale.
-            raceControlResult?.onSuccess { result ->
-                snapshot = snapshot.copy(raceControl = result.messages)
-                raceControlTrackStatus = result.trackStatus
             }
-        }
-
-        val hasAnyData = hasIdentity || snapshot.timings.isNotEmpty() || snapshot.weather != ParsedWeather()
-        val error = when {
-            stale && hasAnyData -> "Showing last successful data - the latest refresh was incomplete."
-            stale -> "Unable to refresh live data. Check the backend connection."
-            else -> null
-        }
-        // The feed's own track status is authoritative; race control messages are only a fallback for
-        // backends that do not report it.
-        snapshot = snapshot.copy(
-            error = error,
-            trackStatus = snapshot.session.trackStatus ?: raceControlTrackStatus
-        )
+            .onFailure { error ->
+                val hasAnyData = snapshot.session.hasIdentity || snapshot.timings.isNotEmpty() ||
+                    snapshot.weather != ParsedWeather()
+                snapshot = snapshot.copy(
+                    error = when {
+                        error is BackendOutdatedException -> OUTDATED_BACKEND_MESSAGE
+                        error is BackendTooNewException -> NEWER_BACKEND_MESSAGE
+                        hasAnyData -> STALE_MESSAGE
+                        else -> UNREACHABLE_MESSAGE
+                    }
+                )
+            }
         return snapshot
     }
 
-    private fun sessionKey(session: ParsedSession): String =
-        listOf(session.meetingName.trim(), session.sessionName.trim(), session.sessionType.trim())
-            .joinToString("|")
+    companion object {
+        const val STALE_MESSAGE = "Showing last successful data - the latest refresh was incomplete."
+        const val UNREACHABLE_MESSAGE = "Unable to refresh live data. Check the backend connection."
+        const val OUTDATED_BACKEND_MESSAGE =
+            "The backend is out of date. Rebuild it (docker compose up -d --build) to show live timing."
+        const val NEWER_BACKEND_MESSAGE = "The backend is newer than this app. Update the app to show live timing."
+    }
 }

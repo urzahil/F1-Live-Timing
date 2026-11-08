@@ -49,6 +49,7 @@ The image pins a specific upstream commit and applies the patches in `patches/` 
    - `PitStops` is every completed stop of the session per driver, with the lap and the pit lane time in seconds. It survives the feed removing entries and a reconnect, and starts again when the session changes. Stops made while the backend was not connected are not in it.
 7. **`07-timing-stats.patch`** subscribes to `TimingStats` and returns it from `GET /api/timing-stats` as `{"TimingStats": {"Withheld": false, "Lines": {"<racing number>": {...}}}}`: each driver's personal best lap, best sectors and best speeds (I1, I2, FL, speed trap) with their rank. Applies on top of 06.
 8. **`08-session-status.patch`** subscribes to F1's `SessionStatus` channel and returns it from `/api/session` as `"SessionStatus": {"Status": "Started"}`. It reads `"Aborted"` while the session is suspended under a red flag, which the app shows as a red flag even when `TrackStatus` still reads safety car or all clear. Applies on top of 07.
+9. **`09-pit-stop-series.patch`** subscribes to F1's `PitStopSeries` channel and returns it from `GET /api/pit-stop-series` as `{"Stops": [...], "PitStopSeries": {...}}`. `Stops` lists every stop of the session, newest first, with `RacingNumber`, `Lap`, `PitStopTime` (stationary, seconds) and `PitLaneTime` (seconds) as the feed sends them. `PitStopSeries` is the raw merged channel, for checking the format against a live session. Applies on top of 08.
 
 After pulling changes to this folder, rebuild with `docker compose up -d --build`.
 
@@ -151,4 +152,5 @@ A round with no documents returns an empty list. A missing or non-numeric `year`
 *   `GET /api/radio`: Team radio telemetry broadcasts.
 *   `GET /api/pitstops`: Pit lane times: the entries the feed shows now (`PitTimes`) and every completed stop of the session per driver (`PitStops`).
 *   `GET /api/timing-stats`: Personal bests, best sectors and best speeds per driver, with rank.
+*   `GET /api/pit-stop-series`: Every pit stop of the session with stationary time (`PitStopTime`) and pit lane time (`PitLaneTime`), plus the raw `PitStopSeries` channel.
 *   `GET /api/documents?year=&round=`: FIA decision documents of a grand prix (`file_url`, `published_at`, title, category).

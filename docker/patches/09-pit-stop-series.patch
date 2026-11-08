@@ -1,0 +1,111 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index 78d3722..b1e3542 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -31,7 +31,8 @@ const SUBSCRIBE_CHANNELS = [
+     'TrackStatus',
+     'PitLaneTimeCollection',
+     'TimingStats',
+-    'SessionStatus'
++    'SessionStatus',
++    'PitStopSeries'
+ ];
+ 
+ class F1LiveClient {
+@@ -72,6 +73,7 @@ class F1LiveClient {
+         if (!this.pitStops || this.replaying) this.pitStops = { key: undefined, stops: {} };
+         this.timingStats = {};
+         this.sessionStatus = {};
++        this.pitStopSeries = {};
+     }
+ 
+     /**
+@@ -296,6 +298,7 @@ class F1LiveClient {
+         if (result.PitLaneTimeCollection) this.routeData('PitLaneTimeCollection', result.PitLaneTimeCollection);
+         if (result.TimingStats) this.routeData('TimingStats', result.TimingStats);
+         if (result.SessionStatus) this.routeData('SessionStatus', result.SessionStatus);
++        if (result.PitStopSeries) this.routeData('PitStopSeries', result.PitStopSeries);
+     }
+ 
+     /**
+@@ -380,6 +383,14 @@ class F1LiveClient {
+                 deepMerge(this.sessionStatus, data);
+                 this.broadcast({ type: 'SessionStatus', data: this.sessionStatus });
+                 break;
++            case 'PitStopSeries':
++                // { PitTimes: { "<racing number>": [ { Timestamp, PitStop: { RacingNumber, PitStopTime, PitLaneTime, Lap } } ] } }
++                // Every stop of the session per driver, times in seconds as strings. Later stops arrive as index-keyed
++                // deltas ({ "44": { "1": {...} } }), which deepMerge applies per index. Served raw until the format is confirmed.
++                deepMerge(this.pitStopSeries, data);
++                delete this.pitStopSeries._kf;
++                this.broadcast({ type: 'PitStopSeries', data: this.pitStopSeries });
++                break;
+             case 'PitLaneTimeCollection':
+                 // { PitTimes: { "<racing number>": { RacingNumber, Duration, Lap } } } — pit lane durations as the
+                 // timing system publishes them, merged per driver. Duration is "" until a time is known, and a
+@@ -470,6 +481,10 @@ class F1LiveClient {
+         return this.timingStats;
+     }
+ 
++    getPitStopSeries() {
++        return this.pitStopSeries;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
+diff --git a/src/routes/session.js b/src/routes/session.js
+index fa2484b..5fde27c 100644
+--- a/src/routes/session.js
++++ b/src/routes/session.js
+@@ -129,6 +129,30 @@ function createSessionRouter(f1Client) {
+         }
+     });
+ 
++    /**
++     * GET /api/pit-stop-series
++     * Retrieves the raw PitStopSeries channel (stationary and pit lane time per stop, keyed by racing number), plus
++     * the same stops flattened into one list ordered by Timestamp, newest first.
++     */
++    router.get('/pit-stop-series', (req, res) => {
++        try {
++            const series = f1Client.getPitStopSeries() || {};
++            const stops = [];
++            for (const [racingNumber, entries] of Object.entries(series.PitTimes || {})) {
++                const list = Array.isArray(entries) ? entries : Object.values(entries || {});
++                for (const entry of list) {
++                    if (!entry || !entry.PitStop) continue;
++                    stops.push({ RacingNumber: entry.PitStop.RacingNumber || racingNumber, Timestamp: entry.Timestamp, ...entry.PitStop });
++                }
++            }
++            stops.sort((a, b) => String(b.Timestamp || '').localeCompare(String(a.Timestamp || '')));
++            res.status(200).json({ Stops: stops, PitStopSeries: series });
++        } catch (error) {
++            console.error('[API Error] Failed to retrieve PitStopSeries:', error);
++            res.status(500).json({ error: 'Internal server error while querying PitStopSeries.' });
++        }
++    });
++
+     return router;
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index d08d544..eabb230 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -89,6 +89,7 @@ app.use((req, res) => {
+             '/api/radio',
+             '/api/pitstops',
+             '/api/timing-stats',
++            '/api/pit-stop-series',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -114,6 +115,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/radio         (alias: /api/team-radio)`);
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
++    console.log(`    - GET http://localhost:${PORT}/api/pit-stop-series`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

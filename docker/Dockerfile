@@ -25,6 +25,8 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 07 - Subscribes to TimingStats and serves it from GET /api/timing-stats (needs 06).
 # 08 - Subscribes to SessionStatus ("Aborted" while red-flagged) and returns it from /api/session (needs 07).
 # 09 - Subscribes to PitStopSeries (stationary and pit lane time per stop) and serves it from GET /api/pit-stop-series (needs 08).
+# 10 - Mounts GET /api/f1livedata/pit-stops: pit stops as listed by f1livedata.com, fetched on request and cached
+#      for 30 s (src/f1livedata/, copied below; needs 09).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \
@@ -32,6 +34,7 @@ RUN sed -i 's/\r$//' /tmp/patches/*.patch \
  && rm -rf /tmp/patches
 COPY replay/ /app/src/replay/
 COPY fia-docs/ /app/src/fia-docs/
+COPY f1livedata/ /app/src/f1livedata/
 
 # Install production dependencies only (express, cors, ws)
 RUN npm install --omit=dev

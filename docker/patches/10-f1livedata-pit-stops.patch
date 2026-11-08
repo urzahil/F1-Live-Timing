@@ -1,0 +1,38 @@
+diff --git a/src/server.js b/src/server.js
+index eabb230..3293084 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -15,6 +15,7 @@ const { createDriversRouter } = require('./routes/drivers');
+ const { createSessionRouter } = require('./routes/session');
+ const { createReplayRouter } = require('./replay/router');
+ const { FiaDocsCache, createDocumentsRouter } = require('./fia-docs/fia-docs');
++const { createF1LiveDataPitStopsRouter } = require('./f1livedata/pit-stops');
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -53,6 +54,9 @@ const fiaDocs = new FiaDocsCache(process.env.DATA_DIR || path.join(__dirname, '.
+ fiaDocs.start();
+ app.use('/api/documents', createDocumentsRouter(fiaDocs));
+ 
++// Pit stops of the current session as listed by f1livedata.com, fetched on request and cached for 30 s
++app.use('/api/f1livedata/pit-stops', createF1LiveDataPitStopsRouter());
++
+ /**
+  * GET /api/status
+  * Returns WebSocket connection state, uptime, and last received message timestamp.
+@@ -90,6 +94,7 @@ app.use((req, res) => {
+             '/api/pitstops',
+             '/api/timing-stats',
+             '/api/pit-stop-series',
++            '/api/f1livedata/pit-stops',
+             '/api/documents',
+             '/docs'
+         ]
+@@ -116,6 +121,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
+     console.log(`    - GET http://localhost:${PORT}/api/pit-stop-series`);
++    console.log(`    - GET http://localhost:${PORT}/api/f1livedata/pit-stops`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
+     console.log(`====================================================================\n`);
+ });

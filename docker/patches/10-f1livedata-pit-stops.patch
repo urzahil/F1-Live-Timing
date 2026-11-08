@@ -1,26 +1,83 @@
+diff --git a/src/f1-client.js b/src/f1-client.js
+index b1e3542..823422a 100644
+--- a/src/f1-client.js
++++ b/src/f1-client.js
+@@ -74,6 +74,8 @@ class F1LiveClient {
+         this.timingStats = {};
+         this.sessionStatus = {};
+         this.pitStopSeries = {};
++        // Polled from f1livedata.com, not sent by SignalR: a reconnect snapshot must not drop it, but a replay does.
++        if (!this.f1LiveDataPitStops || this.replaying) this.f1LiveDataPitStops = null;
+     }
+ 
+     /**
+@@ -391,6 +393,13 @@ class F1LiveClient {
+                 delete this.pitStopSeries._kf;
+                 this.broadcast({ type: 'PitStopSeries', data: this.pitStopSeries });
+                 break;
++            case 'F1LiveDataPitStops':
++                // { source, fetchedAt, session, stops: [...] } — the full list of the session's stops as polled from
++                // f1livedata.com by src/f1livedata/pit-stops.js, replacing the previous poll. Tagged with the session
++                // key and whether it came from a replay, so it is never served for another session or after a replay.
++                this.f1LiveDataPitStops = { ...data, key: this.session.Key, replayed: this.replaying };
++                this.broadcast({ type: 'F1LiveDataPitStops', data: this.f1LiveDataPitStops });
++                break;
+             case 'PitLaneTimeCollection':
+                 // { PitTimes: { "<racing number>": { RacingNumber, Duration, Lap } } } — pit lane durations as the
+                 // timing system publishes them, merged per driver. Duration is "" until a time is known, and a
+@@ -485,6 +494,27 @@ class F1LiveClient {
+         return this.pitStopSeries;
+     }
+ 
++    getF1LiveDataPitStops() {
++        const data = this.f1LiveDataPitStops;
++        if (!data || data.replayed !== this.replaying) return null;
++        if (data.key !== undefined && this.session.Key !== undefined && data.key !== this.session.Key) return null;
++        return data;
++    }
++
++    /**
++     * @description Feeds a message from a source other than SignalR (such as a poller) through the same path as a
++     * live frame: recorded with the session, then routed into the state. Ignored during a replay.
++     * @param {string} channel - Channel name handled by routeData.
++     * @param {Object} payload - Message payload.
++     * @returns {boolean} Whether the message was taken.
++     */
++    ingest(channel, payload) {
++        if (this.replaying) return false;
++        this.recorder.recordFeed(channel, payload);
++        this.routeData(channel, payload);
++        return true;
++    }
++
+     getConnectionStatus() {
+         return {
+             isConnected: this.isConnected || this.replaying,
 diff --git a/src/server.js b/src/server.js
-index eabb230..3293084 100644
+index eabb230..4d34acc 100644
 --- a/src/server.js
 +++ b/src/server.js
 @@ -15,6 +15,7 @@ const { createDriversRouter } = require('./routes/drivers');
  const { createSessionRouter } = require('./routes/session');
  const { createReplayRouter } = require('./replay/router');
  const { FiaDocsCache, createDocumentsRouter } = require('./fia-docs/fia-docs');
-+const { createF1LiveDataPitStopsRouter } = require('./f1livedata/pit-stops');
++const { F1LiveDataPoller, createF1LiveDataPitStopsRouter } = require('./f1livedata/pit-stops');
  
  const app = express();
  const PORT = process.env.PORT || 3000;
-@@ -53,6 +54,9 @@ const fiaDocs = new FiaDocsCache(process.env.DATA_DIR || path.join(__dirname, '.
+@@ -53,6 +54,11 @@ const fiaDocs = new FiaDocsCache(process.env.DATA_DIR || path.join(__dirname, '.
  fiaDocs.start();
  app.use('/api/documents', createDocumentsRouter(fiaDocs));
  
-+// Pit stops of the current session as listed by f1livedata.com, fetched on request and cached for 30 s
-+app.use('/api/f1livedata/pit-stops', createF1LiveDataPitStopsRouter());
++// Pit stops polled from f1livedata.com every 30 s while a session runs, recorded and replayed with the session
++const f1LiveDataPoller = new F1LiveDataPoller(f1Client);
++f1LiveDataPoller.start();
++app.use('/api/f1livedata/pit-stops', createF1LiveDataPitStopsRouter(f1Client, f1LiveDataPoller));
 +
  /**
   * GET /api/status
   * Returns WebSocket connection state, uptime, and last received message timestamp.
-@@ -90,6 +94,7 @@ app.use((req, res) => {
+@@ -90,6 +96,7 @@ app.use((req, res) => {
              '/api/pitstops',
              '/api/timing-stats',
              '/api/pit-stop-series',
@@ -28,7 +85,7 @@ index eabb230..3293084 100644
              '/api/documents',
              '/docs'
          ]
-@@ -116,6 +121,7 @@ const server = app.listen(PORT, () => {
+@@ -116,6 +123,7 @@ const server = app.listen(PORT, () => {
      console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
      console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
      console.log(`    - GET http://localhost:${PORT}/api/pit-stop-series`);

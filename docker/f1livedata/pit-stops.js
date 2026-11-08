@@ -1,23 +1,26 @@
 /**
  * @file pit-stops.js
- * @description GET /api/f1livedata/pit-stops: pit stops as listed by f1livedata.com, with stationary time
- * (pit_stop_time) and pit lane time (pit_lane_time) per stop. Without parameters it reads f1livedata.com's current
- * session; ?session_year=&session_number=&session_event_number= picks a past one (numbers as in their
- * /api/session/past_events, e.g. 2026, 18, 4 for the 2026 United States Grand Prix race).
+ * @description Polls f1livedata.com for the current session's pit stops every 30 s while a session is running, and
+ * serves them from GET /api/f1livedata/pit-stops.
  *
+ * Each poll that finds a change is fed to F1LiveClient as the "F1LiveDataPitStops" channel, through the same path as
+ * the SignalR feed: it is written to the session recording and merged into the client state. A replay therefore
+ * serves the pit stops recorded with the session, and the endpoint reads the client state either way.
+ *
+ * Polling only runs while SessionStatus is Started, Aborted (red flag) or Finished, and never during a replay.
  * f1livedata.com marks a stop is_synthetic when F1 did not publish its details: pit_stop_time is then 0 and
  * pit_lane_time is their approximation. Stops are passed through as they come.
- *
- * Nothing is fetched in the background. Each distinct request is answered from a 30 s cache, so polling this
- * endpoint sends at most two requests to f1livedata.com every 30 s per session, however often it is called.
  */
 
 const express = require('express');
 
 const SOURCE = 'https://f1livedata.com';
-const CACHE_MS = 30 * 1000;
+const CHANNEL = 'F1LiveDataPitStops';
+const POLL_MS = 30 * 1000;
 const REQUEST_TIMEOUT_MS = 15 * 1000;
 const USER_AGENT = 'F1-Live-Timing personal backend (+https://github.com/urzahil/F1-Live-Timing)';
+const ACTIVE_STATUSES = ['Started', 'Aborted', 'Finished'];
+const SESSION_KEYS = ['session_year', 'session_number', 'session_event_number'];
 
 /**
  * @param {string} pathAndQuery - Path on f1livedata.com, with its query string.
@@ -36,12 +39,9 @@ async function getJson(pathAndQuery) {
     return res.json();
 }
 
-const SESSION_KEYS = ['session_year', 'session_number', 'session_event_number'];
-
 /**
- * @description Flattens the pit stop rows into one stop per entry. The site's live stream sends rows shaped
- * { data: { "<driver>": { stop_number, lap, pit_stop_time, pit_lane_time, timestamp, is_synthetic } } }; rows that
- * already are a stop are kept as they are. The format of the REST answer is not documented, so both are accepted.
+ * @description Flattens the pit stop rows into one stop per entry. The REST answer is a list of stops; the site's
+ * live stream wraps them as { data: { "<driver>": {...} } }, so that shape is unwrapped too.
  * @param {any} rows - Body of /api/timing_data/pit_stops.
  * @returns {Object[]} Stops, newest first.
  */
@@ -60,62 +60,96 @@ function flattenStops(rows) {
     return stops;
 }
 
+class F1LiveDataPoller {
+    /**
+     * @param {F1LiveClient} client - Client whose state and recording receive the pit stops.
+     */
+    constructor(client) {
+        this.client = client;
+        this.timer = null;
+        this.running = false;
+        this.lastPollAt = null;
+        this.lastError = null;
+        this.lastStops = null;
+    }
+
+    /**
+     * @returns {boolean} Whether a live session is running, so polling is worthwhile.
+     */
+    active() {
+        if (this.client.replaying) return false;
+        const status = (this.client.getSessionStatus && this.client.getSessionStatus()) || {};
+        return ACTIVE_STATUSES.includes(String(status.Status || ''));
+    }
+
+    start() {
+        if (this.timer) return;
+        this.timer = setInterval(() => this.poll(), POLL_MS);
+        this.timer.unref();
+    }
+
+    async poll() {
+        if (this.running || !this.active()) return;
+        this.running = true;
+        try {
+            const session = await getJson('/api/session/current');
+            const params = new URLSearchParams();
+            for (const key of SESSION_KEYS) {
+                if (session && session[key] !== undefined && session[key] !== null) params.append(key, String(session[key]));
+            }
+            const stops = flattenStops(await getJson(`/api/timing_data/pit_stops?${params.toString()}`));
+            this.lastPollAt = new Date().toISOString();
+            this.lastError = null;
+            // Only changes are fed in, so a recording holds one record per new or corrected stop, not one per poll.
+            const serialized = JSON.stringify(stops);
+            if (serialized !== this.lastStops || !this.client.getF1LiveDataPitStops()) {
+                const fed = this.client.ingest(CHANNEL, { source: SOURCE, fetchedAt: this.lastPollAt, session, stops });
+                if (fed) this.lastStops = serialized;
+            }
+        } catch (err) {
+            this.lastPollAt = new Date().toISOString();
+            // fetch() reports network errors as a bare "fetch failed"; the reason is in err.cause.
+            this.lastError = err.status === 404
+                ? 'f1livedata.com has no current session'
+                : err.cause ? `${err.message}: ${err.cause.message || err.cause}` : err.message;
+            if (err.status !== 404) console.error('[F1LiveData] Pit stops poll failed:', this.lastError);
+        } finally {
+            this.running = false;
+        }
+    }
+
+    /**
+     * @returns {{polling: boolean, intervalSeconds: number, lastPollAt: string|null, lastError: string|null}}
+     */
+    status() {
+        return { polling: this.active(), intervalSeconds: POLL_MS / 1000, lastPollAt: this.lastPollAt, lastError: this.lastError };
+    }
+}
+
 /**
+ * @param {F1LiveClient} client - Client holding the pit stops (live or replayed).
+ * @param {F1LiveDataPoller} poller - Poller reported alongside them.
  * @returns {import('express').Router} Router serving GET / (mounted at /api/f1livedata/pit-stops).
  */
-function createF1LiveDataPitStopsRouter() {
+function createF1LiveDataPitStopsRouter(client, poller) {
     const router = express.Router();
-    // Keyed by the requested session ("current" or "year/number/event"): { at, body } or a pending fetch.
-    const cache = new Map();
-
-    const load = async (requested) => {
-        const session = requested || (await getJson('/api/session/current'));
-        const params = new URLSearchParams();
-        for (const key of SESSION_KEYS) {
-            if (session && session[key] !== undefined && session[key] !== null) params.append(key, String(session[key]));
-        }
-        const raw = await getJson(`/api/timing_data/pit_stops?${params.toString()}`);
-        return { source: SOURCE, fetchedAt: new Date().toISOString(), session, stops: flattenStops(raw), raw };
-    };
-
-    router.get('/', async (req, res) => {
-        const given = SESSION_KEYS.filter((key) => req.query[key] !== undefined);
-        if (given.length && (given.length !== SESSION_KEYS.length || !SESSION_KEYS.every((key) => /^\d+$/.test(String(req.query[key]))))) {
-            return res.status(400).json({ error: `Pass all of ${SESSION_KEYS.join(', ')} as numbers, or none for the current session.` });
-        }
-        const requested = given.length ? Object.fromEntries(SESSION_KEYS.map((key) => [key, Number(req.query[key])])) : null;
-        const cacheKey = requested ? SESSION_KEYS.map((key) => requested[key]).join('/') : 'current';
+    router.get('/', (req, res) => {
         try {
-            let entry = cache.get(cacheKey);
-            if (!entry || (entry.body && Date.now() - entry.at > CACHE_MS)) {
-                // Concurrent requests share one fetch instead of each calling f1livedata.com.
-                entry = { pending: load(requested) };
-                cache.set(cacheKey, entry);
-                try {
-                    cache.set(cacheKey, { at: Date.now(), body: await entry.pending });
-                } catch (err) {
-                    cache.delete(cacheKey);
-                    throw err;
-                }
-                entry = cache.get(cacheKey);
-            } else if (entry.pending) {
-                await entry.pending.catch(() => {});
-                entry = cache.get(cacheKey);
-                if (!entry || !entry.body) throw new Error('f1livedata.com request failed');
-            }
-            res.status(200).json(entry.body);
-        } catch (err) {
-            if (err.status === 404 && !requested) {
-                return res.status(404).json({ error: 'f1livedata.com has no current session. Pass session_year, session_number and session_event_number for a past one.' });
-            }
-            // fetch() reports network errors as a bare "fetch failed"; the reason is in err.cause.
-            const reason = err.cause ? `${err.message}: ${err.cause.message || err.cause}` : err.message;
-            console.error('[F1LiveData] Pit stops request failed:', reason);
-            res.status(502).json({ error: `f1livedata.com request failed: ${reason}` });
+            const data = client.getF1LiveDataPitStops() || {};
+            res.status(200).json({
+                source: SOURCE,
+                replay: !!client.replaying,
+                fetchedAt: data.fetchedAt || null,
+                session: data.session || null,
+                stops: data.stops || [],
+                poller: poller.status()
+            });
+        } catch (error) {
+            console.error('[API Error] Failed to retrieve f1livedata.com pit stops:', error);
+            res.status(500).json({ error: 'Internal server error while reading f1livedata.com pit stops.' });
         }
     });
-
     return router;
 }
 
-module.exports = { createF1LiveDataPitStopsRouter, flattenStops };
+module.exports = { CHANNEL, F1LiveDataPoller, createF1LiveDataPitStopsRouter, flattenStops };

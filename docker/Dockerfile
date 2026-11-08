@@ -25,8 +25,8 @@ RUN git clone https://github.com/julesr0y/f1-livetiming-api.git . \
 # 07 - Subscribes to TimingStats and serves it from GET /api/timing-stats (needs 06).
 # 08 - Subscribes to SessionStatus ("Aborted" while red-flagged) and returns it from /api/session (needs 07).
 # 09 - Subscribes to PitStopSeries (stationary and pit lane time per stop) and serves it from GET /api/pit-stop-series (needs 08).
-# 10 - Mounts GET /api/f1livedata/pit-stops: pit stops as listed by f1livedata.com, fetched on request and cached
-#      for 30 s (src/f1livedata/, copied below; needs 09).
+# 10 - Polls f1livedata.com's pit stops every 30 s while a session runs, records them with the session and serves
+#      them from GET /api/f1livedata/pit-stops, live or replayed (src/f1livedata/, copied below; needs 09).
 # CRs are stripped in case a Windows checkout converted a patch; git apply fails the build if one no longer applies.
 COPY patches/ /tmp/patches/
 RUN sed -i 's/\r$//' /tmp/patches/*.patch \

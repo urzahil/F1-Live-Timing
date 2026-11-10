@@ -1,0 +1,38 @@
+diff --git a/src/server.js b/src/server.js
+index d08d544..0163769 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -15,6 +15,7 @@ const { createDriversRouter } = require('./routes/drivers');
+ const { createSessionRouter } = require('./routes/session');
+ const { createReplayRouter } = require('./replay/router');
+ const { FiaDocsCache, createDocumentsRouter } = require('./fia-docs/fia-docs');
++const { createLiveRouter } = require('./live/live-snapshot');
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -53,6 +54,9 @@ const fiaDocs = new FiaDocsCache(process.env.DATA_DIR || path.join(__dirname, '.
+ fiaDocs.start();
+ app.use('/api/documents', createDocumentsRouter(fiaDocs));
+ 
++// The whole live timing screen (session, clock, track status, weather, race control, drivers) in one response
++app.use('/api/live', createLiveRouter(f1Client));
++
+ /**
+  * GET /api/status
+  * Returns WebSocket connection state, uptime, and last received message timestamp.
+@@ -90,6 +94,7 @@ app.use((req, res) => {
+             '/api/pitstops',
+             '/api/timing-stats',
+             '/api/documents',
++            '/api/live',
+             '/docs'
+         ]
+     });
+@@ -115,6 +120,7 @@ const server = app.listen(PORT, () => {
+     console.log(`    - GET http://localhost:${PORT}/api/pitstops`);
+     console.log(`    - GET http://localhost:${PORT}/api/timing-stats`);
+     console.log(`    - GET http://localhost:${PORT}/api/documents?year=&round=`);
++    console.log(`    - GET http://localhost:${PORT}/api/live`);
+     console.log(`====================================================================\n`);
+ });
+ 

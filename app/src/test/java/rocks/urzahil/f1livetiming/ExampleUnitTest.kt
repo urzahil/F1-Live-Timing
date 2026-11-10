@@ -16,26 +16,6 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun refreshPolicyRefreshesCompletedSessionOnlyWhenNeededOrExpired() {
-        val policy = LiveTimingRefreshPolicy(dataTtlMillis = 120_000L)
-        val recent = policy.shouldFetchTimings(
-            now = 100_000L, lastFetch = 50_000L, force = false,
-            sessionIsLive = false, showLatestSession = false, hasSessionIdentity = true,
-            justCompleted = false, sessionFinished = true, sessionKey = "2026:race",
-            finalFetchedSessionKey = "2026:race"
-        )
-        val expired = policy.shouldFetchTimings(
-            now = 200_000L, lastFetch = 50_000L, force = false,
-            sessionIsLive = false, showLatestSession = false, hasSessionIdentity = true,
-            justCompleted = false, sessionFinished = true, sessionKey = "2026:race",
-            finalFetchedSessionKey = "2026:race"
-        )
-        assertEquals(false, recent)
-        assertEquals(true, expired)
-    }
-
-
-    @Test
     fun emptyResultsAreNotCached() {
         var now = 100L
         val cache = ExpiringListCache<String, String>(ttlMillis = 1_000L, clock = { now })

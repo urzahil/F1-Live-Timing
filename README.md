@@ -14,6 +14,7 @@ An Android app for following Formula 1 race weekends: live timing, tyre stints, 
 - Track weather
 - Full tyre stint history
 - Automatic polling every 5 s while a session is live
+- Live timing comes from the self-hosted backend in [`docker/`](docker/README.md), which interprets the F1 feed and sends the app one ready-to-show snapshot per refresh
 
 ### Standings
 - Drivers' and constructors' championships for the current season

@@ -18,11 +18,11 @@ import rocks.urzahil.f1livetiming.data.repository.F1ChampionshipRepository
 import rocks.urzahil.f1livetiming.data.repository.CalendarResultsCache
 import rocks.urzahil.f1livetiming.data.repository.ExpiringListCache
 import rocks.urzahil.f1livetiming.data.repository.FiaDocumentsRepository
-import rocks.urzahil.f1livetiming.data.repository.ParsedDriverTiming
-import rocks.urzahil.f1livetiming.data.repository.ParsedRaceControlMessage
-import rocks.urzahil.f1livetiming.data.repository.TrackStatus
-import rocks.urzahil.f1livetiming.data.repository.ParsedSession
-import rocks.urzahil.f1livetiming.data.repository.ParsedWeather
+import rocks.urzahil.f1livetiming.data.model.ParsedDriverTiming
+import rocks.urzahil.f1livetiming.data.model.ParsedRaceControlMessage
+import rocks.urzahil.f1livetiming.data.model.TrackStatus
+import rocks.urzahil.f1livetiming.data.model.ParsedSession
+import rocks.urzahil.f1livetiming.data.model.ParsedWeather
 import rocks.urzahil.f1livetiming.data.repository.ServerSettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -270,7 +270,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
             }
             _isRefreshing.value = true
             try {
-                fetchLiveCycleLocked(force = true)
+                fetchLiveCycleLocked()
             } finally {
                 _isRefreshing.value = false
                 refreshMutex.unlock()
@@ -451,7 +451,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun fetchLiveCycle() {
         if (!refreshMutex.tryLock()) return
         try {
-            fetchLiveCycleLocked(force = false)
+            fetchLiveCycleLocked()
         } finally {
             refreshMutex.unlock()
             runPendingManualRefresh()
@@ -464,12 +464,8 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchLiveCycleLocked(force: Boolean) {
-        val snapshot = liveTimingCoordinator.refresh(
-            baseUrl = backendUrl.value,
-            force = force,
-            showLatestSession = showLatestSession.value
-        )
+    private suspend fun fetchLiveCycleLocked() {
+        val snapshot = liveTimingCoordinator.refresh(backendUrl.value)
         val previousSession = _session.value
         _session.value = snapshot.session
         if (previousSession.isLive && snapshot.session.status == "SESSION FINISHED") onLiveSessionFinished()

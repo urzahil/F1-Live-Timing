@@ -1,6 +1,8 @@
 package rocks.urzahil.f1livetiming.data.repository
 
 import rocks.urzahil.f1livetiming.data.api.NetworkClient
+import rocks.urzahil.f1livetiming.data.api.awaitResponse
+import rocks.urzahil.f1livetiming.data.api.cancellableResult
 import rocks.urzahil.f1livetiming.data.model.ConstructorStandingItem
 import rocks.urzahil.f1livetiming.data.model.DriverStandingItem
 import rocks.urzahil.f1livetiming.data.model.F1Constructor
@@ -17,9 +19,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.Response
 import okhttp3.Request
 import org.json.JSONArray
@@ -37,33 +37,6 @@ import java.util.TimeZone
  * show while OpenF1 refuses unauthenticated requests (it does for the whole of a live session).
  */
 class F1ChampionshipRepository(private val driverMetadataFile: File? = null) {
-
-    /** Await OkHttp without blocking an IO thread and cancel the call with its coroutine. */
-    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
-        continuation.invokeOnCancellation { cancel() }
-        enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) {
-                continuation.resumeWith(Result.failure(e))
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (continuation.isActive) {
-                    continuation.resumeWith(Result.success(response))
-                } else {
-                    response.close()
-                }
-            }
-        })
-    }
-
-    /** Preserve structured cancellation instead of converting it into a normal failed Result. */
-    private suspend fun <T> cancellableResult(block: suspend () -> T): Result<T> = try {
-        Result.success(block())
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (error: Exception) {
-        Result.failure(error)
-    }
 
     private val service = NetworkClient.jolpicaService
     private val httpClient = NetworkClient.okHttpClient

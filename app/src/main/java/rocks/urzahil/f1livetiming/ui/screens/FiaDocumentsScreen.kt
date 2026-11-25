@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import rocks.urzahil.f1livetiming.data.model.FiaDocument
+import rocks.urzahil.f1livetiming.data.repository.isWebUrl
 import rocks.urzahil.f1livetiming.data.model.SeasonRaceItem
 import rocks.urzahil.f1livetiming.ui.components.PdfViewer
 import rocks.urzahil.f1livetiming.ui.theme.F1CardBorder
@@ -183,7 +184,7 @@ private fun DocumentList(state: FiaDocumentsState, onRetry: () -> Unit, onOpen: 
 private fun DocumentViewer(document: FiaDocument, state: FiaDocumentsState, onRetry: () -> Unit) {
     val context = LocalContext.current
     val openInBrowser: () -> Unit = {
-        document.fileUrl?.let { url ->
+        document.fileUrl?.takeIf { isWebUrl(it) }?.let { url ->
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             } catch (_: ActivityNotFoundException) {

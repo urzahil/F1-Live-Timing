@@ -39,12 +39,17 @@ object ChampionshipPredictor {
     const val CONSTRUCTOR_RACE_MAX = 43
     const val CONSTRUCTOR_SPRINT_MAX = 15
 
+    // Race (up to the 3 hour red-flag limit) plus time for the results API to publish the points.
+    const val RACE_SCORING_WINDOW_MILLIS = 6L * 60 * 60 * 1000
+
     /**
      * Counts the sessions still to be added to the standings.
      *
-     * Rounds after [standingsRound] count in full. For the standings round itself the sprint has
-     * already been scored, but on a sprint weekend the standings can update after Saturday, so the
-     * Grand Prix still counts while its start time is in the future.
+     * Rounds after [standingsRound] count in full. The standings round itself only has a Grand Prix still
+     * to score on a sprint weekend, where the standings advance to that round after Saturday's sprint. That
+     * Grand Prix keeps counting until [RACE_SCORING_WINDOW_MILLIS] after its scheduled start, so Sunday's
+     * points do not vanish when the lights go out, before the standings have been updated. On any other
+     * weekend the standings only reach the round once its race has been scored.
      */
     fun remainingSessions(calendar: List<SeasonRaceItem>, standingsRound: Int?, nowMillis: Long): RemainingSessions {
         var races = 0
@@ -57,7 +62,7 @@ object ChampionshipPredictor {
                     if (race.sprint != null) sprints++
                 }
                 round == standingsRound -> {
-                    if (!hasStarted(race.date, race.time, nowMillis)) races++
+                    if (race.sprint != null && !isRaceScored(race.date, race.time, nowMillis)) races++
                 }
             }
         }
@@ -88,6 +93,7 @@ object ChampionshipPredictor {
         return leader.takeIf { contenders.count { it.inContention } == 1 }
     }
 
-    private fun hasStarted(dateStr: String?, timeStr: String?, nowMillis: Long): Boolean =
-        scheduleUtcMillis(dateStr, timeStr)?.let { it <= nowMillis } ?: false
+    /** Whether the Grand Prix is old enough (even after a long red flag) to be in the standings. */
+    private fun isRaceScored(dateStr: String?, timeStr: String?, nowMillis: Long): Boolean =
+        scheduleUtcMillis(dateStr, timeStr)?.let { it + RACE_SCORING_WINDOW_MILLIS <= nowMillis } ?: false
 }

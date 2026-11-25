@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP stays allowed by default because the self-hosted Docker backend is usually reached over the
+  LAN without TLS. The public services the app talks to directly never need it, so it is forbidden there.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.jolpi.ca</domain>
+        <domain includeSubdomains="true">api.openf1.org</domain>
+        <domain includeSubdomains="true">fia.com</domain>
+        <domain includeSubdomains="true">media.formula1.com</domain>
+    </domain-config>
+</network-security-config>

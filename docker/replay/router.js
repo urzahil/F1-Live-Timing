@@ -48,9 +48,9 @@ function createReplayRouter(f1Client) {
         next();
     });
 
-    const handle = (action) => (req, res) => {
+    const handle = (action) => async (req, res) => {
         try {
-            res.status(200).json(action(req.body || {}));
+            res.status(200).json(await action(req.body || {}));
         } catch (err) {
             if (!err.status) console.error('[Replay] Unexpected error:', err);
             res.status(err.status || 500).json({ error: err.message });
@@ -68,8 +68,8 @@ function createReplayRouter(f1Client) {
         }
         return { recordings: f1Client.recorder.list() };
     }));
-    api.post('/start', handle((body) => {
-        replayer.start(body.id || body.slot, { speed: body.speed, lap: body.lap });
+    api.post('/start', handle(async (body) => {
+        await replayer.start(body.id || body.slot, { speed: body.speed, lap: body.lap });
         return replayer.status();
     }));
     api.post('/speed', handle((body) => {

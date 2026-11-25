@@ -48,7 +48,7 @@ object NetworkClient {
 
     /** Normalize equivalent URLs so each configured backend reuses one Retrofit service. */
     internal fun normalizeBaseUrl(baseUrl: String): String {
-        val trimmed = baseUrl.trim().let { if (it.contains("://")) it else "http://$it" }
+        val trimmed = BackendUrl.withDefaultScheme(baseUrl)
         val parsed = trimmed.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Invalid backend URL")
         val path = parsed.encodedPath.trimEnd('/') + "/"

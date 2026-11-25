@@ -336,6 +336,22 @@ test('timed sessions and the qualifying part', () => {
     assert.equal(session('Qualifying', 'Sprint Qualifying', 6).qualifyingPart, 'SQ2');
 });
 
+test('the qualifying part follows the size of the grid', () => {
+    const part = (grid, knockedOut) => buildLiveSnapshot({
+        sessionInfo: { Meeting: { Name: 'Qatar Grand Prix' }, Type: 'Qualifying', Name: 'Qualifying', SessionStatus: 'Started' },
+        leaderboard: leaderboard(Array.from({ length: grid }, (_, i) => ({
+            RacingNumber: String(i + 1), Tla: `D${i + 1}`, Position: String(i + 1), KnockedOut: i >= grid - knockedOut
+        })))
+    }).session.qualifyingPart;
+
+    // 22 cars: 6 out after Q1, 12 after Q2.
+    assert.deepEqual([0, 5, 6, 11, 12].map((n) => part(22, n)), ['Q1', 'Q1', 'Q2', 'Q2', 'Q3']);
+    // 21 cars: 5 out after Q1, 11 after Q2.
+    assert.deepEqual([0, 4, 5, 10, 11].map((n) => part(21, n)), ['Q1', 'Q1', 'Q2', 'Q2', 'Q3']);
+    // 20 cars: 4 out after Q1, 10 after Q2.
+    assert.deepEqual([0, 3, 4, 9, 10].map((n) => part(20, n)), ['Q1', 'Q1', 'Q2', 'Q2', 'Q3']);
+});
+
 test('weather readings are formatted for display', () => {
     assert.deepEqual(
         buildWeather({ AirTemp: '23.4', TrackTemp: 41, Humidity: '55', Pressure: '1012.3', WindSpeed: '1.2', WindDirection: '180', Rainfall: '1' }),

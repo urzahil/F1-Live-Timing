@@ -99,6 +99,11 @@ class Recorder {
         // A recording left behind by a container stop, held until the first snapshot says whether the same
         // session is still on (it is then continued) or a different one has started (it is then closed).
         this.leftover = null;
+        // Compression of a promoted recording runs in the background. Promotions of the same slot are chained
+        // on this per-slot tail so two of them never commit at the same time, and every one works on its own
+        // uniquely named files.
+        this.promotions = new Map();
+        this.promotionSeq = 0;
         try {
             fs.mkdirSync(dir, { recursive: true });
             this.recoverLeftover();
@@ -360,33 +365,65 @@ class Recorder {
             return;
         }
 
-        const pending = path.join(this.dir, `${slot}.pending`);
-        const tmp = path.join(this.dir, `${slot}.rec.gz.tmp`);
+        const id = `${Date.now()}.${this.promotionSeq++}`;
+        const pending = path.join(this.dir, `${slot}.${id}.pending`);
+        const tmp = path.join(this.dir, `${slot}.${id}.rec.gz.tmp`);
+        // The current recording is claimed synchronously: it is about to be written to again or replaced.
         if (keepCurrent) fs.copyFileSync(this.currentPath, pending);
         else fs.renameSync(this.currentPath, pending);
         const meta = { ...header, ...stats, partial: stats.firstLap !== null && stats.firstLap > 1 };
-        pipeline(fs.createReadStream(pending), zlib.createGzip(), fs.createWriteStream(tmp))
-            .then(() => {
-                // Read again: the user may have toggled "keep" while the recording was being compressed.
-                const previous = this.readMeta(slot);
-                if (previous && previous.keep) {
-                    if (previous.key === header.key) {
-                        // A fuller copy of the same session replaces the kept one and stays kept.
-                        meta.keep = true;
-                    } else if (fs.existsSync(this.recordingPath(slot))) {
-                        // A newer session of this type: the kept recording moves aside instead of being overwritten.
-                        const archived = this.archiveId(previous);
-                        fs.renameSync(this.recordingPath(slot), this.recordingPath(archived));
-                        fs.writeFileSync(this.metaPath(archived), JSON.stringify({ ...previous, keep: true }));
-                        console.log(`[Recorder] Kept previous ${slot} recording as ${archived}`);
-                    }
+        const previousPromotion = this.promotions.get(slot) || Promise.resolve();
+        const promotion = previousPromotion.then(() => this.commit(slot, header, stats, meta, pending, tmp));
+        this.promotions.set(slot, promotion);
+        promotion.finally(() => {
+            if (this.promotions.get(slot) === promotion) this.promotions.delete(slot);
+        });
+        return promotion;
+    }
+
+    /**
+     * @description Compresses a claimed recording and stores it in its slot. Runs after any earlier promotion of
+     * the same slot has finished, so it sees what that one left behind.
+     * @returns {Promise<void>} Resolves once the promotion is finished, whether it saved or discarded the copy.
+     */
+    async commit(slot, header, stats, meta, pending, tmp) {
+        const discard = () => {
+            for (const file of [pending, tmp]) {
+                try {
+                    fs.unlinkSync(file);
+                } catch (e) {}
+            }
+        };
+        try {
+            // An earlier, queued promotion may have stored a fuller copy of the same session meanwhile.
+            const existing = this.readMeta(slot);
+            if (existing && existing.key === header.key && existing.messages >= stats.messages) {
+                discard();
+                return;
+            }
+            await pipeline(fs.createReadStream(pending), zlib.createGzip(), fs.createWriteStream(tmp));
+            // Read again: the user may have toggled "keep" while the recording was being compressed.
+            const previous = this.readMeta(slot);
+            if (previous && previous.keep) {
+                if (previous.key === header.key) {
+                    // A fuller copy of the same session replaces the kept one and stays kept.
+                    meta.keep = true;
+                } else if (fs.existsSync(this.recordingPath(slot))) {
+                    // A newer session of this type: the kept recording moves aside instead of being overwritten.
+                    const archived = this.archiveId(previous);
+                    fs.renameSync(this.recordingPath(slot), this.recordingPath(archived));
+                    fs.writeFileSync(this.metaPath(archived), JSON.stringify({ ...previous, keep: true }));
+                    console.log(`[Recorder] Kept previous ${slot} recording as ${archived}`);
                 }
-                fs.renameSync(tmp, this.recordingPath(slot));
-                fs.writeFileSync(this.metaPath(slot), JSON.stringify(meta));
-                fs.unlinkSync(pending);
-                console.log(`[Recorder] Saved ${slot} recording (${stats.messages} messages)`);
-            })
-            .catch((err) => console.error(`[Recorder] Failed to save ${slot} recording:`, err.message));
+            }
+            fs.renameSync(tmp, this.recordingPath(slot));
+            fs.writeFileSync(this.metaPath(slot), JSON.stringify(meta));
+            fs.unlinkSync(pending);
+            console.log(`[Recorder] Saved ${slot} recording (${stats.messages} messages)`);
+        } catch (err) {
+            console.error(`[Recorder] Failed to save ${slot} recording:`, err.message);
+            discard();
+        }
     }
 
     /**

@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class ExampleUnitTest {
+class ExpiringListCacheAndRefreshPolicyTest {
 
     @Test
     fun refreshPolicyUsesSlowerPollingWithoutAnActiveSession() {

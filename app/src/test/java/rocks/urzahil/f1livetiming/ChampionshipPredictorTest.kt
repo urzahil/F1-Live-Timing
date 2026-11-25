@@ -52,6 +52,22 @@ class ChampionshipPredictorTest {
     }
 
     @Test
+    fun keepsCountingTheSprintWeekendGrandPrixWhileItRunsAndUntilPointsArrive() {
+        // Lights out at 13:00 on Sunday: the 25 points must still be counted, and for a while afterwards.
+        val during = ChampionshipPredictor.remainingSessions(calendar, standingsRound = 2, nowMillis = millis("2026-03-15T14:30:00"))
+        assertEquals(RemainingSessions(races = 3, sprints = 1), during)
+        val justAfter = ChampionshipPredictor.remainingSessions(calendar, standingsRound = 2, nowMillis = millis("2026-03-15T17:00:00"))
+        assertEquals(RemainingSessions(races = 3, sprints = 1), justAfter)
+    }
+
+    @Test
+    fun doesNotCountTheStandingsRoundOnAWeekendWithoutASprint() {
+        // Standings only reach round 3 once its race has been scored, even right before its start time.
+        val remaining = ChampionshipPredictor.remainingSessions(calendar, standingsRound = 3, nowMillis = millis("2026-03-22T12:00:00"))
+        assertEquals(RemainingSessions(races = 1, sprints = 1), remaining)
+    }
+
+    @Test
     fun dropsTheStandingsRoundOnceItsGrandPrixHasStarted() {
         val remaining = ChampionshipPredictor.remainingSessions(calendar, standingsRound = 2, nowMillis = millis("2026-03-16T00:00:00"))
         assertEquals(RemainingSessions(races = 2, sprints = 1), remaining)

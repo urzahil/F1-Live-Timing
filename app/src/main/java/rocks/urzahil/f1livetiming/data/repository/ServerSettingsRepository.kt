@@ -2,6 +2,7 @@ package rocks.urzahil.f1livetiming.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import rocks.urzahil.f1livetiming.data.api.BackendUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,12 +29,7 @@ class ServerSettingsRepository(context: Context) {
     val showLatestSession: StateFlow<Boolean> = _showLatestSession.asStateFlow()
 
     fun updateBackendUrl(newUrl: String) {
-        val trimmed = newUrl.trim()
-        val sanitized = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            trimmed
-        } else {
-            "http://$trimmed"
-        }
+        val sanitized = BackendUrl.withDefaultScheme(newUrl)
         prefs.edit().putString(KEY_BACKEND_URL, sanitized).apply()
         _backendUrl.value = sanitized
     }

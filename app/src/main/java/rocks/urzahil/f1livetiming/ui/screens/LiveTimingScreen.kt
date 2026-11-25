@@ -144,6 +144,11 @@ fun LiveTimingScreen(
                 }
             }
 
+            // The last good snapshot stays on screen when a refresh fails, so say that it may be outdated.
+            if (liveError != null) {
+                StaleDataBanner(message = liveError)
+            }
+
             // Table Header Bar (POS, DRIVER, TYRE, BEST LAP, LAST LAP, GAP)
             TableHeaderRow()
 
@@ -190,6 +195,28 @@ fun LiveTimingScreen(
                 }
             }
         }
+    }
+}
+
+/** Compact warning shown above the table while the leaderboard is a preserved, possibly outdated snapshot. */
+@Composable
+private fun StaleDataBanner(message: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .background(Color(0xFFE67E22).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+            .border(1.dp, Color(0xFFE67E22).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .testTag("stale_data_banner"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = message,
+            color = Color(0xFFE67E22),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

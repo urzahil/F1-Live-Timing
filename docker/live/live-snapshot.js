@@ -150,19 +150,26 @@ function isTimedSession(sessionType, sessionName) {
     return name.includes('practice') || name.includes('qualifying') || name.includes('shootout');
 }
 
+const Q2_DRIVERS = 16;
+const Q3_DRIVERS = 10;
+
 /**
  * "Q1"/"Q2"/"Q3" (or "SQ1"… for sprint qualifying), or null outside qualifying. The feed does not name the
- * part, so it is inferred from the eliminations: 6 drivers are out after Q1 and 12 after Q2.
+ * part, so it is inferred from how many drivers are still running: 16 go through to Q2 and 10 to Q3, which is
+ * 6 eliminations in each of Q1 and Q2 on a 22-car grid. Counting the survivors instead of the eliminations
+ * keeps the part right when the grid is smaller (a withdrawn car, or a replayed session with fewer cars).
+ * @param {number} gridSize - Number of drivers on the timing screen.
  */
-function qualifyingPart(sessionType, sessionName, knockedOut) {
+function qualifyingPart(sessionType, sessionName, knockedOut, gridSize) {
     const type = sessionType.trim().toLowerCase();
     const name = sessionName.toLowerCase();
     const isQualifying = type === 'qualifying' ||
         (type === '' && (name.includes('qualifying') || name.includes('shootout')));
     if (!isQualifying) return null;
     const prefix = name.includes('sprint') || name.includes('shootout') ? 'SQ' : 'Q';
-    // Assumes 6 drivers are knocked out per part; change this if the format changes.
-    const part = knockedOut >= 12 ? 3 : knockedOut >= 6 ? 2 : 1;
+    // Change these if the format changes.
+    const remaining = gridSize - knockedOut;
+    const part = knockedOut > 0 && remaining <= Q3_DRIVERS ? 3 : knockedOut > 0 && remaining <= Q2_DRIVERS ? 2 : 1;
     return `${prefix}${part}`;
 }
 
@@ -548,7 +555,7 @@ function buildLiveSnapshot(state = {}) {
         session: {
             ...sessionFields,
             isTimed: isTimedSession(session.sessionType, session.sessionName),
-            qualifyingPart: qualifyingPart(session.sessionType, session.sessionName, knockedOut),
+            qualifyingPart: qualifyingPart(session.sessionType, session.sessionName, knockedOut, drivers.length),
             clock: parseSessionClock(state.clock)
         },
         trackStatus,

@@ -5,8 +5,11 @@
  */
 
 const fs = require('fs');
+const { promisify } = require('util');
 const zlib = require('zlib');
 const { splitLine, parsePayload } = require('./recorder');
+
+const gunzip = promisify(zlib.gunzip);
 
 const MIN_SPEED = 0.1;
 const MAX_SPEED = 100;
@@ -90,11 +93,15 @@ class Replayer {
         return speed;
     }
 
-    load(slot) {
+    /**
+     * @description Reads and indexes a recording. Reading and decompressing are asynchronous so a large
+     * recording does not stall the event loop that serves /api/live and the WebSocket clients.
+     */
+    async load(slot) {
         if (!this.recorder.has(slot)) throw httpError(404, `No recording stored for "${slot}".`);
         const file = this.recorder.recordingPath(slot);
 
-        const lines = zlib.gunzipSync(fs.readFileSync(file)).toString('utf-8').split('\n');
+        const lines = (await gunzip(await fs.promises.readFile(file))).toString('utf-8').split('\n');
         const header = JSON.parse(lines[0]);
         const ts = [];
         const ws = [];
@@ -131,10 +138,11 @@ class Replayer {
      * @description Starts replaying a stored recording, replacing live data (or a running replay).
      * @param {string} slot - Recording id: a slot name (latest of that type) or an archived kept recording.
      * @param {{speed?: number, lap?: number}} [opts] - Playback speed multiplier and lap to start from.
+     * @returns {Promise<void>} Resolves once the recording is loaded and playing.
      */
-    start(slot, opts = {}) {
+    async start(slot, opts = {}) {
         const speed = this.parseSpeed(opts.speed);
-        const rec = this.load(slot);
+        const rec = await this.load(slot);
         const target = this.lapIndex(rec, opts.lap);
 
         this.halt();
@@ -200,7 +208,23 @@ class Replayer {
         const rec = this.rec;
         const pos = target > 0 ? rec.ts[target] : 0;
         this.idx = 0;
-        while (this.idx < target) this.emit(this.idx++, pos);
+        // Fast-forwarding rebuilds state from the start of the recording. Every intermediate record would
+        // otherwise be broadcast to the WebSocket clients, which only need the state at the target, so
+        // frames are held back and a single update goes out once the state is complete.
+        const client = this.client;
+        const canMute = typeof client.broadcast === 'function' && target > 0;
+        const hadOwnBroadcast = Object.prototype.hasOwnProperty.call(client, 'broadcast');
+        const originalBroadcast = client.broadcast;
+        if (canMute) client.broadcast = () => {};
+        try {
+            while (this.idx < target) this.emit(this.idx++, pos);
+        } finally {
+            if (canMute) {
+                if (hadOwnBroadcast) client.broadcast = originalBroadcast;
+                else delete client.broadcast;
+            }
+        }
+        if (canMute && client.session) client.broadcast({ type: 'SessionInfo', data: client.session });
         this.base = pos;
         this.wallStart = Date.now();
         this.finished = false;

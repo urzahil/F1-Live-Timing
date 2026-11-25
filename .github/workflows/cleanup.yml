@@ -12,15 +12,16 @@ jobs:
       contents: read
     steps:
       # Uses the preinstalled GitHub CLI instead of a third-party action.
-      - name: Delete workflow runs older than 3 days (keeping the 3 newest)
+      - name: Delete workflow runs older than 3 days (keeping the 3 newest and all Play releases)
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -eu
           cutoff="$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          # Play Store release runs are the audit trail of what was shipped, so they are never deleted.
           gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
-            --jq ".workflow_runs[] | select(.status == \"completed\") | [.created_at, .id] | @tsv" \
+            --jq ".workflow_runs[] | select(.status == \"completed\" and (.path != \".github/workflows/play-release.yml\")) | [.created_at, .id] | @tsv" \
             | sort -r | tail -n +4 \
             | while IFS="$(printf '\t')" read -r created id; do
                 if [ "$created" \< "$cutoff" ]; then

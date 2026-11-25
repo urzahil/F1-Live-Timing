@@ -3,8 +3,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install git for repository cloning and curl for container healthcheck
-RUN apk add --no-cache git curl
+# Install git for repository cloning, curl for container healthcheck and su-exec to drop root at start
+RUN apk add --no-cache git curl su-exec
 
 # Clone the official repository, pinned so the local patches below keep applying
 ARG UPSTREAM_COMMIT=76512d8c0124acd21e499ef924363e1dbdd825b4
@@ -55,6 +55,14 @@ EXPOSE 3000
 # Health check to ensure API is responding
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/api/status || exit 1
+
+# The server runs as the unprivileged "node" user. The entrypoint starts as root only to hand the data
+# directory (often a volume created by an earlier root-owned run) to that user, then drops privileges.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh \
+ && mkdir -p /app/data \
+ && chown -R node:node /app/data
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Start the live timing API server (node src/server.js)
 CMD ["npm", "start"]

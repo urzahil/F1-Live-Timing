@@ -12,8 +12,8 @@ android {
     applicationId = "rocks.urzahil.f1livetiming"
     minSdk = 24
     targetSdk = 36
-    versionCode = 29
-    versionName = "1.11.1"
+    versionCode = 30
+    versionName = "1.12.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -39,8 +39,8 @@ android {
     }
   }
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
   }
   buildFeatures {
     compose = true

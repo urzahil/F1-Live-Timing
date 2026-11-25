@@ -41,8 +41,9 @@ fun FlagIndicator(
         upper == "SC" || upper.contains("SAFETY") -> Pair(FlagSafetyCar, "SAFETY CAR")
         upper.contains("STARTED") || upper.contains("LIVE") -> Pair(FlagGreen, "GREEN FLAG")
         upper.contains("FINISHED") || upper.contains("CHEQUERED") -> Pair(inactiveGrey, "SESSION ENDED")
-        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") || upper.contains("DISCONNECTED") -> Pair(inactiveGrey, "SESSION STARTED")
-        else -> Pair(inactiveGrey, upper.ifBlank { "SESSION STARTED" })
+        upper.contains("DISCONNECTED") -> Pair(inactiveGrey, "OFFLINE")
+        upper.contains("NO ACTIVE") || upper.contains("INACTIVE") -> Pair(inactiveGrey, "INACTIVE")
+        else -> Pair(inactiveGrey, upper.ifBlank { "INACTIVE" })
     }
 
     // Only red flag and safety car states pulse. Other states run no animation at all, so the pill does

@@ -116,21 +116,34 @@ fun ChampionshipPredictorScreen(
             item {
                 CategoryTabs(category = category, onSelect = { category = it })
             }
-            item {
-                SummaryCard(
-                    standingsRound = standingsRound,
-                    pointsAvailable = pointsAvailable,
-                    races = remaining.races,
-                    sprints = remaining.sprints,
-                    contenders = contenders,
-                    isDrivers = isDrivers
-                )
-            }
-            item {
-                ContenderChart(contenders = contenders, labelWidth = if (isDrivers) 44.dp else 96.dp)
-            }
-            item {
-                ExplanationCard()
+            if (contenders.isEmpty()) {
+                // The constructors table can fail to load while the drivers table succeeded. Keep the tabs
+                // reachable and say so, instead of reporting "0 teams still in the title fight".
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
+                        PredictorError(
+                            message = error ?: "The ${if (isDrivers) "drivers" else "constructors"} standings are not available yet.",
+                            onRetry = onRetry
+                        )
+                    }
+                }
+            } else {
+                item {
+                    SummaryCard(
+                        standingsRound = standingsRound,
+                        pointsAvailable = pointsAvailable,
+                        races = remaining.races,
+                        sprints = remaining.sprints,
+                        contenders = contenders,
+                        isDrivers = isDrivers
+                    )
+                }
+                item {
+                    ContenderChart(contenders = contenders, labelWidth = if (isDrivers) 44.dp else 96.dp)
+                }
+                item {
+                    ExplanationCard()
+                }
             }
         }
     }

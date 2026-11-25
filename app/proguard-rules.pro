@@ -12,13 +12,13 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
+# Preserve the line number information for
 # debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keepattributes SourceFile,LineNumberTable
 
-# If you keep the line number information, uncomment this to
+# With the line numbers kept, replace the real source file name to
 # hide the original source file name.
-#-renamesourcefileattribute SourceFile
+-renamesourcefileattribute SourceFile
 
 # Retrofit/Moshi use model constructors, generic signatures and annotations at runtime.
 -keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations, AnnotationDefault

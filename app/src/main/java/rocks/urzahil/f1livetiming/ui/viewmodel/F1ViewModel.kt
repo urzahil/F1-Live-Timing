@@ -304,6 +304,18 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         _selectedDriverForStints.value = driver
     }
 
+    /**
+     * Keeps an open stint dialog current: the selection is tracked by racing number, so each live
+     * refresh swaps in the driver's latest timing. A driver missing from a refresh keeps the last data.
+     */
+    private fun refreshSelectedDriver(timings: List<ParsedDriverTiming>) {
+        val selected = _selectedDriverForStints.value ?: return
+        if (selected.racingNumber.isBlank()) return
+        timings.firstOrNull { it.racingNumber == selected.racingNumber }?.let {
+            _selectedDriverForStints.value = it
+        }
+    }
+
     fun closeDriverStints() {
         _selectedDriverForStints.value = null
     }
@@ -471,6 +483,7 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         if (previousSession.isLive && snapshot.session.status == "SESSION FINISHED") onLiveSessionFinished()
         _weather.value = snapshot.weather
         _liveTimings.value = snapshot.timings
+        refreshSelectedDriver(snapshot.timings)
         _raceControl.value = snapshot.raceControl
         _trackStatus.value = snapshot.trackStatus
         _liveError.value = snapshot.error
@@ -484,34 +497,36 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     fun loadChampionshipData() {
         if (!_isChampionshipLoading.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            _championshipError.value = null
+            try {
+                _championshipError.value = null
 
-            // Both tables load side by side; the driver metadata they share is fetched once.
-            val driversRequest = async { championshipRepo.fetchDriverStandings() }
-            val constructorsResult = championshipRepo.fetchConstructorStandings()
-            val driversResult = driversRequest.await()
+                // Both tables load side by side; the driver metadata they share is fetched once.
+                val driversRequest = async { championshipRepo.fetchDriverStandings() }
+                val constructorsResult = championshipRepo.fetchConstructorStandings()
+                val driversResult = driversRequest.await()
 
-            driversResult.onSuccess { (season, list, round) ->
-                _championshipSeason.value = season
-                _driverStandings.value = list
-                _standingsRound.value = round
-            }.onFailure { error ->
-                Log.w(TAG, "Driver standings request failed (${error.javaClass.simpleName})")
-                _championshipError.value = "Unable to load driver standings. Please try again."
-            }
-
-            constructorsResult.onSuccess { (season, list, round) ->
-                if (_championshipSeason.value.isBlank()) _championshipSeason.value = season
-                if (_standingsRound.value == null) _standingsRound.value = round
-                _constructorStandings.value = list
-            }.onFailure { error ->
-                Log.w(TAG, "Constructor standings request failed (${error.javaClass.simpleName})")
-                if (_driverStandings.value.isEmpty()) {
-                    _championshipError.value = "Unable to load constructor standings. Please try again."
+                driversResult.onSuccess { (season, list, round) ->
+                    _championshipSeason.value = season
+                    _driverStandings.value = list
+                    _standingsRound.value = round
+                }.onFailure { error ->
+                    Log.w(TAG, "Driver standings request failed (${error.javaClass.simpleName})")
+                    _championshipError.value = "Unable to load driver standings. Please try again."
                 }
-            }
 
-            _isChampionshipLoading.value = false
+                constructorsResult.onSuccess { (season, list, round) ->
+                    if (_championshipSeason.value.isBlank()) _championshipSeason.value = season
+                    if (_standingsRound.value == null) _standingsRound.value = round
+                    _constructorStandings.value = list
+                }.onFailure { error ->
+                    Log.w(TAG, "Constructor standings request failed (${error.javaClass.simpleName})")
+                    if (_driverStandings.value.isEmpty()) {
+                        _championshipError.value = "Unable to load constructor standings. Please try again."
+                    }
+                }
+            } finally {
+                _isChampionshipLoading.value = false
+            }
         }
     }
 
@@ -534,20 +549,22 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
     fun loadCalendarData() {
         if (!_isCalendarLoading.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            _calendarError.value = null
+            try {
+                _calendarError.value = null
 
-            val result = championshipRepo.fetchCurrentCalendar()
-            result.onSuccess { (season, races) ->
-                _calendarSeason.value = season
-                _calendarRaces.value = races
-                // The tool may have been opened before the calendar arrived
-                if (_selectedMoreTool.value == MoreTool.FIA_DOCUMENTS) checkFiaUpcomingRace()
-            }.onFailure { error ->
-                Log.w(TAG, "Season calendar request failed (${error.javaClass.simpleName})")
-                _calendarError.value = "Unable to load the season calendar. Please try again."
+                val result = championshipRepo.fetchCurrentCalendar()
+                result.onSuccess { (season, races) ->
+                    _calendarSeason.value = season
+                    _calendarRaces.value = races
+                    // The tool may have been opened before the calendar arrived
+                    if (_selectedMoreTool.value == MoreTool.FIA_DOCUMENTS) checkFiaUpcomingRace()
+                }.onFailure { error ->
+                    Log.w(TAG, "Season calendar request failed (${error.javaClass.simpleName})")
+                    _calendarError.value = "Unable to load the season calendar. Please try again."
+                }
+            } finally {
+                _isCalendarLoading.value = false
             }
-
-            _isCalendarLoading.value = false
         }
     }
 
@@ -654,15 +671,20 @@ class F1ViewModel(application: Application) : AndroidViewModel(application) {
         }
         sessionResultsJob = viewModelScope.launch {
             _isSessionResultsLoading.value = true
-            fetch().onSuccess { list ->
-                if (list.isNotEmpty()) cache[cacheKey] = list
-                _sessionResults.update { store(it, list) }
-            }.onFailure { error ->
-                Log.w(TAG, "Request for $label failed (${error.javaClass.simpleName})")
-                _sessionResults.update { store(it, emptyList()) }
-                _sessionResultsError.value = "Unable to load $label. Please try again."
+            try {
+                fetch().onSuccess { list ->
+                    if (list.isNotEmpty()) cache[cacheKey] = list
+                    _sessionResults.update { store(it, list) }
+                }.onFailure { error ->
+                    Log.w(TAG, "Request for $label failed (${error.javaClass.simpleName})")
+                    _sessionResults.update { store(it, emptyList()) }
+                    _sessionResultsError.value = "Unable to load $label. Please try again."
+                }
+            } finally {
+                // A cancelled load is replaced by a newer one (or reset by the code that cancelled it), so it
+                // must not clear a flag the newer load has already raised.
+                if (isActive) _isSessionResultsLoading.value = false
             }
-            _isSessionResultsLoading.value = false
         }
     }
 }

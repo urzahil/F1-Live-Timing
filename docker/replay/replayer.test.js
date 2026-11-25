@@ -127,15 +127,15 @@ afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('no clock is reported before the recording sends one', () => {
-    replayer.start('qualifying', { speed: 1 });
+test('no clock is reported before the recording sends one', async () => {
+    await replayer.start('qualifying', { speed: 1 });
     wait(5_000);
     assert.deepEqual(client.getExtrapolatedClock(), {});
 });
 
 for (const speed of [1, 5, 10]) {
-    test(`the clock matches the replay position at ${speed}x`, () => {
-        replayer.start('qualifying', { speed });
+    test(`the clock matches the replay position at ${speed}x`, async () => {
+        await replayer.start('qualifying', { speed });
         for (let realMs = 0; realMs * speed < END; realMs += 7_300) {
             const pos = replayer.position();
             const expected = expectedRemaining(pos);
@@ -146,8 +146,8 @@ for (const speed of [1, 5, 10]) {
     });
 }
 
-test('Remaining is whole seconds and Utc carries the fraction', () => {
-    replayer.start('qualifying', { speed: 5 });
+test('Remaining is whole seconds and Utc carries the fraction', async () => {
+    await replayer.start('qualifying', { speed: 5 });
     wait(10_123);
     const clock = client.getExtrapolatedClock();
     assert.match(clock.Remaining, /^\d+:\d\d:\d\d$/);
@@ -156,8 +156,8 @@ test('Remaining is whole seconds and Utc carries the fraction', () => {
     assert.ok(Date.parse(clock.Utc) <= Date.now() && Date.now() - Date.parse(clock.Utc) < 1000);
 });
 
-test('a partial stop delta keeps Remaining and freezes the clock at 0', () => {
-    replayer.start('qualifying', { speed: 10 });
+test('a partial stop delta keeps Remaining and freezes the clock at 0', async () => {
+    await replayer.start('qualifying', { speed: 10 });
     wait((CLOCK_STOP + 1_000) / 10);
     const clock = client.getExtrapolatedClock();
     assert.equal(clock.Extrapolating, false);
@@ -166,23 +166,23 @@ test('a partial stop delta keeps Remaining and freezes the clock at 0', () => {
     assert.equal(appRemaining(), 0);
 });
 
-test('the clock is not reported running once it reaches 0', () => {
-    replayer.start('qualifying', { speed: 10 });
+test('the clock is not reported running once it reaches 0', async () => {
+    await replayer.start('qualifying', { speed: 10 });
     // Between the clock hitting 0 and the stop message arriving.
     wait((CLOCK_STOP + 200) / 10);
     assert.equal(client.getExtrapolatedClock().Extrapolating, false);
     assert.equal(appRemaining(), 0);
 });
 
-test('a restarted clock counts down from the new value', () => {
-    replayer.start('qualifying', { speed: 10 });
+test('a restarted clock counts down from the new value', async () => {
+    await replayer.start('qualifying', { speed: 10 });
     wait(1_600_000 / 10);
     assert.equal(client.getExtrapolatedClock().Extrapolating, true);
     assert.ok(Math.abs(appRemaining() - expectedRemaining(replayer.position())) <= 1);
 });
 
-test('pausing freezes the clock', () => {
-    replayer.start('qualifying', { speed: 5 });
+test('pausing freezes the clock', async () => {
+    await replayer.start('qualifying', { speed: 5 });
     wait(60_000);
     replayer.setSpeed(0);
     const clock = client.getExtrapolatedClock();
@@ -196,8 +196,8 @@ test('pausing freezes the clock', () => {
     assert.equal(client.getExtrapolatedClock().Extrapolating, true);
 });
 
-test('changing speed keeps the clock continuous', () => {
-    replayer.start('qualifying', { speed: 1 });
+test('changing speed keeps the clock continuous', async () => {
+    await replayer.start('qualifying', { speed: 1 });
     wait(60_000);
     const before = appRemaining();
     replayer.setSpeed(5);
@@ -206,9 +206,9 @@ test('changing speed keeps the clock continuous', () => {
     assert.ok(Math.abs(appRemaining() - (before - 50_000)) <= 1);
 });
 
-test('seeking mid-session at 5x reports the clock for that position', () => {
+test('seeking mid-session at 5x reports the clock for that position', async () => {
     // seek() is what start({lap}) and jump() use; call it directly since this recording has no laps.
-    replayer.start('qualifying', { speed: 5 });
+    await replayer.start('qualifying', { speed: 5 });
     wait(1_000);
     replayer.seek(MID_Q1_INDEX); // replays the Q1 start record at once, 590 s after it was due
     assert.equal(replayer.position(), MID_Q1);
@@ -217,8 +217,8 @@ test('seeking mid-session at 5x reports the clock for that position', () => {
     assert.ok(Math.abs(appRemaining() - expectedRemaining(replayer.position())) <= 1);
 });
 
-test('a finished replay reports a stopped clock', () => {
-    replayer.start('qualifying', { speed: 100 });
+test('a finished replay reports a stopped clock', async () => {
+    await replayer.start('qualifying', { speed: 100 });
     wait(END / 100 + 2_000);
     assert.equal(replayer.finished, true);
     assert.equal(client.getExtrapolatedClock().Extrapolating, false);
@@ -228,24 +228,24 @@ test('a finished replay reports a stopped clock', () => {
     assert.equal(appRemaining(), frozen);
 });
 
-test('downtime skipped by the recording does not shift the clock', () => {
+test('downtime skipped by the recording does not shift the clock', async () => {
     replayer.stop();
     setup(120_000);
-    replayer.start('qualifying', { speed: 10 });
+    await replayer.start('qualifying', { speed: 10 });
     wait(1_700_000 / 10);
     assert.ok(Math.abs(appRemaining() - expectedRemaining(replayer.position())) <= 1);
 });
 
-test('after stopping, the client clock is returned unchanged', () => {
-    replayer.start('qualifying', { speed: 5 });
+test('after stopping, the client clock is returned unchanged', async () => {
+    await replayer.start('qualifying', { speed: 5 });
     wait(60_000);
     replayer.stop();
     client.extrapolatedClock = { Utc: '2026-11-01T10:00:00Z', Remaining: '0:12:34', Extrapolating: true };
     assert.equal(client.getExtrapolatedClock(), client.extrapolatedClock);
 });
 
-test('a malformed recorded clock falls back to the client state', () => {
-    replayer.start('qualifying', { speed: 1 });
+test('a malformed recorded clock falls back to the client state', async () => {
+    await replayer.start('qualifying', { speed: 1 });
     wait(15_000);
     replayer.clock.Remaining = 'soon';
     assert.equal(client.getExtrapolatedClock(), client.extrapolatedClock);
@@ -267,4 +267,26 @@ test('formatRemaining produces the H:MM:SS form the app parses', () => {
     assert.equal(formatRemaining(3_600_000), '1:00:00');
     assert.equal(formatRemaining(11 * 3_600_000 + 61_000), '11:01:01');
     assert.equal(formatRemaining(-5), '0:00:00');
+});
+
+test('seeking replays silently and broadcasts once afterwards', async () => {
+    const sent = [];
+    client.session = { Key: 1 };
+    client.broadcast = (message) => sent.push(message.type);
+    client.routeData = function routeData() {
+        this.broadcast({ type: 'frame' });
+    };
+    await replayer.start('qualifying', { speed: 0 });
+    sent.length = 0;
+
+    replayer.seek(MID_Q1_INDEX + 1);
+
+    // The records before the target replay without a frame going out; the first message is the one update.
+    // (Anything after it is the replay continuing from the target.)
+    assert.equal(sent[0], 'SessionInfo');
+    assert.equal(sent.filter((type) => type === 'SessionInfo').length, 1);
+    // Broadcasting works again afterwards.
+    sent.length = 0;
+    client.broadcast({ type: 'frame' });
+    assert.deepEqual(sent, ['frame']);
 });

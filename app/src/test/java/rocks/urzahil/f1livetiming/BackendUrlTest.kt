@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import rocks.urzahil.f1livetiming.data.api.BackendUrl
-import rocks.urzahil.f1livetiming.data.repository.isWebUrl
+import rocks.urzahil.f1livetiming.data.repository.isHttpsUrl
 
 class BackendUrlTest {
 
@@ -19,7 +19,8 @@ class BackendUrlTest {
 
     @Test
     fun publicHostsDefaultToHttps() {
-        listOf("f1api.example.com", "f1api.example.com:8443/api", "8.8.8.8:3000", "172.32.0.1", "192.169.0.1", "user@host.example.org")
+        listOf("f1api.example.com", "f1api.example.com:8443/api", "8.8.8.8:3000", "172.32.0.1", "192.169.0.1", "user@host.example.org",
+            "evil.com\\@10.0.0.1", "134744072", "0x08080808", "x.example.com:3000/x?next=http://y")
             .forEach { assertEquals(it, "https://$it", BackendUrl.withDefaultScheme(it)) }
     }
 
@@ -31,14 +32,14 @@ class BackendUrlTest {
 
     @Test
     fun onlyWebAddressesAreAcceptedAsDocumentLinks() {
-        assertTrue(isWebUrl("https://www.fia.com/doc.pdf"))
-        assertTrue(isWebUrl("http://192.168.1.20:3000/doc.pdf"))
-        assertFalse(isWebUrl(null))
-        assertFalse(isWebUrl(""))
-        assertFalse(isWebUrl("file:///data/data/app/secret"))
-        assertFalse(isWebUrl("content://media/external/1"))
-        assertFalse(isWebUrl("intent:#Intent;end"))
-        assertFalse(isWebUrl("javascript:alert(1)"))
-        assertFalse(isWebUrl("/relative/doc.pdf"))
+        assertTrue(isHttpsUrl("https://www.fia.com/doc.pdf"))
+        assertFalse(isHttpsUrl("http://www.fia.com/doc.pdf"))
+        assertFalse(isHttpsUrl(null))
+        assertFalse(isHttpsUrl(""))
+        assertFalse(isHttpsUrl("file:///data/data/app/secret"))
+        assertFalse(isHttpsUrl("content://media/external/1"))
+        assertFalse(isHttpsUrl("intent:#Intent;end"))
+        assertFalse(isHttpsUrl("javascript:alert(1)"))
+        assertFalse(isHttpsUrl("/relative/doc.pdf"))
     }
 }

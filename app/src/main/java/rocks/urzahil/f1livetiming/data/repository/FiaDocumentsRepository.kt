@@ -1,8 +1,7 @@
 package rocks.urzahil.f1livetiming.data.repository
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -15,12 +14,20 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 /**
  * Lists FIA decision documents through the configured backend and downloads their PDFs into
  * [cacheDir]. Published documents never change, so a downloaded PDF is reused as long as it stays cached.
  */
 class FiaDocumentsRepository(private val cacheDir: File) {
+
+    // Shares the app's connection pool. Document links must stay on https, so a redirect to http is not followed,
+    // and a whole-call timeout stops a server that trickles bytes from keeping a download alive indefinitely.
+    private val pdfClient = NetworkClient.okHttpClient.newBuilder()
+        .followSslRedirects(false)
+        .callTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     private companion object {
         // Keeps the PDF cache bounded; the least recently opened files are deleted first.
@@ -35,8 +42,8 @@ class FiaDocumentsRepository(private val cacheDir: File) {
     suspend fun fetchDocuments(baseUrl: String, year: Int, round: Int): Result<List<FiaDocument>> =
         cancellableResult {
             NetworkClient.createLiveService(baseUrl).getFiaDocuments(year, round).documents.orEmpty()
-                // The URLs come from a user-configurable backend: keep only web links.
-                .filter { isWebUrl(it.fileUrl) }
+                // The URLs come from a user-configurable backend: keep only https links.
+                .filter { isHttpsUrl(it.fileUrl) }
                 .sortedByDescending { it.publishedAt.orEmpty() }
         }
 
@@ -59,11 +66,14 @@ class FiaDocumentsRepository(private val cacheDir: File) {
             // winding down must not make two writers share, rename and delete the same file.
             val tmp = File.createTempFile("${target.name}.", ".part", dir)
             try {
-                NetworkClient.okHttpClient.newCall(Request.Builder().url(httpUrl).build()).awaitResponse().use { response ->
+                pdfClient.newCall(Request.Builder().url(httpUrl).build()).awaitResponse().use { response ->
                     if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                     val declared = response.body.contentLength()
                     if (declared > MAX_PDF_BYTES) throw IOException("Document too large")
-                    tmp.outputStream().use { out -> response.body.byteStream().copyLimited(out, MAX_PDF_BYTES) }
+                    // Blocking reads: runInterruptible lets cancelling the coroutine interrupt a stalled read.
+                    runInterruptible {
+                        tmp.outputStream().use { out -> response.body.byteStream().copyLimited(out, MAX_PDF_BYTES) }
+                    }
                 }
                 // A captcha or error page served with status 200 would otherwise reach the PDF renderer.
                 if (!tmp.hasPdfHeader()) throw IOException("Not a PDF document")
@@ -77,12 +87,10 @@ class FiaDocumentsRepository(private val cacheDir: File) {
         }
     }
 
-    private suspend fun InputStream.copyLimited(out: OutputStream, limit: Long) {
+    private fun InputStream.copyLimited(out: OutputStream, limit: Long) {
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var total = 0L
         while (true) {
-            // Lets a cancelled download stop between reads instead of draining the whole body.
-            currentCoroutineContext().ensureActive()
             val read = read(buffer)
             if (read < 0) return
             total += read
@@ -110,8 +118,5 @@ class FiaDocumentsRepository(private val cacheDir: File) {
         MessageDigest.getInstance("SHA-1").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 }
 
-/** True for an absolute http(s) address; anything else (file:, content:, intent:, javascript:) is rejected. */
-internal fun isWebUrl(url: String?): Boolean {
-    val scheme = url?.trim()?.toHttpUrlOrNull()?.scheme
-    return scheme == "https" || scheme == "http"
-}
+/** True for an absolute https address; anything else (http:, file:, content:, intent:, javascript:) is rejected. */
+internal fun isHttpsUrl(url: String?): Boolean = url?.trim()?.toHttpUrlOrNull()?.isHttps == true
